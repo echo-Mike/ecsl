@@ -185,7 +185,7 @@ inline void l2(const void* ptr)
  */
 inline void nt(const void* ptr)
 {
-    nt(ptr);
+    nt_m(ptr);
 }
 
 } // namespace prefetch

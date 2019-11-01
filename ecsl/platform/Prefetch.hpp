@@ -2,10 +2,39 @@
 #define ECSL_PLATFORM_PREFETCH_HPP_
 
 /**
- * @file Prefetch.h
+ * @file Prefetch.hpp
  * Allows to prefetch data into different cache levels for different purposes
  *
- * Sources:
+ * Prefetching is a capability of a processor's memory management system
+ * to early obtain data from memory. If processor's memory management system
+ * is capable of prefetching then a set of special assembler instructions
+ * will be present in processor's instructions set. This instructions are not
+ * the mandotary action no most platforms but a hint for processor's
+ * memory management system.
+ * It is a known fact that programmers are terrible in identification of hot
+ * data patterns so it is not recommended to use this instructions.
+ * The functions present here are compiled to single instruction on most
+ * platforms. But this instruction may be reordered in body of containing
+ * function by compiler so the reorder barrier must be used to prevent it.
+ * All functions preset take a pointer to some memory location. The prefetch
+ * system on most platforms will load the whole block of data known as
+ * cacheline on which provided address is located. On most platforms the
+ * cacheline is 64 bytes long or greater.
+ * The prefetching from 0/NULL/nullptr is implementation dependent and
+ * may or may not generate the SIGSEGV. Same can be told for any address
+ * that is not a in a virtual address space of a running process.
+ * There are 2 modes of prefetching for read-only access and for
+ * read/write access. Sometimes the read-only access is a magnitude faster
+ * then the read/write access.
+ * If You want to use functions present in this file You should consider
+ * reading this article first: "What Every Programmer Should Know About Memory"
+ * by Ulrich Drepper, avaliable at:
+ *  https://people.freebsd.org/~lstewart/articles/cpumemory.pdf
+ *
+ * And remember:
+ *  Processors are better in identification of memory access patterns than You.
+ *
+ * Links:
  *  https://msdn.microsoft.com/ru-ru/library/hh977022.aspx
  *  https://msdn.microsoft.com/ru-ru/library/hh875058.aspx
  *  https://msdn.microsoft.com/ru-ru/library/b0084kay.aspx
@@ -81,6 +110,7 @@ void any(const void* ptr)
 {
     detail::prefetch::prefetch_impl<s, l>(ptr);
 }
+
 /**
  * Prefetch a cache line in SHARED state into all cache levels
  * @param ptr Address to prefetch
@@ -100,7 +130,7 @@ inline void l1_r(const void* ptr)
 }
 /**
  * Prefetch a cache line in SHARED state into all cache
- * levels except the 0th and 1th cache levels.
+ * levels except the 0th and 1th cache levels
  * @param ptr Address to prefetch
  */
 inline void l2_r(const void* ptr)
@@ -108,7 +138,8 @@ inline void l2_r(const void* ptr)
     any<detail::prefetch::read, detail::prefetch::L2>(ptr);
 }
 /**
- * Prefetch a cache line in SHARED state into all cache levels (non-temporal/transient version).
+ * Prefetch a cache line in SHARED state into all cache levels
+ * (non-temporal/transient version).
  * The non-temporal prefetch is intended as a prefetch hint that processor will
  * use the prefetched data only once or short period, unlike the
  * l0_r function which imply that prefetched data to use repeatedly.
@@ -118,6 +149,7 @@ inline void nt_r(const void* ptr)
 {
     any<detail::prefetch::read, detail::prefetch::NT>(ptr);
 }
+
 /**
  * Prefetch a cache line in EXCLUSIVE state into all cache levels
  * @param ptr Address to prefetch
@@ -137,7 +169,7 @@ inline void l1_m(const void* ptr)
 }
 /**
  * Prefetch a cache line in EXCLUSIVE state into all cache
- * levels except the 0th and 1th cache levels.
+ * levels except the 0th and 1th cache levels
  * @param ptr Address to prefetch
  */
 inline void l2_m(const void* ptr)
@@ -145,16 +177,18 @@ inline void l2_m(const void* ptr)
     any<detail::prefetch::modify, detail::prefetch::L2>(ptr);
 }
 /**
- * Prefetch a cache line in EXCLUSIVE state into all cache levels (non-temporal/transient version).
+ * Prefetch a cache line in EXCLUSIVE state into all cache levels
+ * (non-temporal/transient version).
  * The non-temporal prefetch is intended as a prefetch hint that processor will
  * use the prefetched data only once or short period, unlike the
- * l0_r function which imply that prefetched data to use repeatedly.
+ * l0_m function which imply that prefetched data to use repeatedly.
  * @param ptr Address to prefetch
  */
 inline void nt_m(const void* ptr)
 {
     any<detail::prefetch::modify, detail::prefetch::NT>(ptr);
 }
+
 /**
  * Default prefetch operation to L0
  * @param ptr Address to prefetch

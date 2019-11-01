@@ -105,19 +105,14 @@ void prefetch_impl(const void* ptr)
 
 namespace prefetch {
 
-template<detail::prefetch::state s, detail::prefetch::level l>
-void any(const void* ptr)
-{
-    detail::prefetch::prefetch_impl<s, l>(ptr);
-}
-
 /**
  * Prefetch a cache line in SHARED state into all cache levels
  * @param ptr Address to prefetch
  */
 inline void l0_r(const void* ptr)
 {
-    any<detail::prefetch::read, detail::prefetch::L0>(ptr);
+    using namespace detail::prefetch;
+    prefetch_impl<read, L0>(ptr);
 }
 /**
  * Prefetch a cache line in SHARED state into all cache
@@ -126,7 +121,8 @@ inline void l0_r(const void* ptr)
  */
 inline void l1_r(const void* ptr)
 {
-    any<detail::prefetch::read, detail::prefetch::L1>(ptr);
+    using namespace detail::prefetch;
+    prefetch_impl<read, L1>(ptr);
 }
 /**
  * Prefetch a cache line in SHARED state into all cache
@@ -135,7 +131,8 @@ inline void l1_r(const void* ptr)
  */
 inline void l2_r(const void* ptr)
 {
-    any<detail::prefetch::read, detail::prefetch::L2>(ptr);
+    using namespace detail::prefetch;
+    prefetch_impl<read, L2>(ptr);
 }
 /**
  * Prefetch a cache line in SHARED state into all cache levels
@@ -147,7 +144,8 @@ inline void l2_r(const void* ptr)
  */
 inline void nt_r(const void* ptr)
 {
-    any<detail::prefetch::read, detail::prefetch::NT>(ptr);
+    using namespace detail::prefetch;
+    prefetch_impl<read, NT>(ptr);
 }
 
 /**
@@ -156,7 +154,8 @@ inline void nt_r(const void* ptr)
  */
 inline void l0_m(const void* ptr)
 {
-    any<detail::prefetch::modify, detail::prefetch::L0>(ptr);
+    using namespace detail::prefetch;
+    prefetch_impl<modify, L0>(ptr);
 }
 /**
  * Prefetch a cache line in EXCLUSIVE state into all cache
@@ -165,7 +164,8 @@ inline void l0_m(const void* ptr)
  */
 inline void l1_m(const void* ptr)
 {
-    any<detail::prefetch::modify, detail::prefetch::L1>(ptr);
+    using namespace detail::prefetch;
+    prefetch_impl<modify, L1>(ptr);
 }
 /**
  * Prefetch a cache line in EXCLUSIVE state into all cache
@@ -174,7 +174,8 @@ inline void l1_m(const void* ptr)
  */
 inline void l2_m(const void* ptr)
 {
-    any<detail::prefetch::modify, detail::prefetch::L2>(ptr);
+    using namespace detail::prefetch;
+    prefetch_impl<modify, L2>(ptr);
 }
 /**
  * Prefetch a cache line in EXCLUSIVE state into all cache levels
@@ -186,7 +187,8 @@ inline void l2_m(const void* ptr)
  */
 inline void nt_m(const void* ptr)
 {
-    any<detail::prefetch::modify, detail::prefetch::NT>(ptr);
+    using namespace detail::prefetch;
+    prefetch_impl<modify, NT>(ptr);
 }
 
 /**

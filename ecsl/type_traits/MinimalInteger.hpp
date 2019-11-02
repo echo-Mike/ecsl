@@ -120,7 +120,6 @@ using has_unsigned_minimal_integer_trait = typename std::conditional<
 
 } // namespace detail
 
-template <class T>
 /**
  * Defines minimal signed integer type
  * that is capable of holding T's bit representation.
@@ -128,6 +127,7 @@ template <class T>
  * is capable of holding T's bit representation.
  * Use ecsl::has_signed_minimal_integer<T>::value to check
  */
+template <class T>
 struct signed_minimal_integer
 {
     using type = detail::signed_minimal_integer_trait<T>;
@@ -136,11 +136,12 @@ struct signed_minimal_integer
 template<class T>
 using signed_minimal_integer_t = typename signed_minimal_integer<T>::type;
 
+/**
+ * may be std::true_type or std::false_type
+ */
 template<class T>
-/* may be std::true_type or std::false_type */
 using has_signed_minimal_integer = detail::has_signed_minimal_integer_trait<T>;
 
-template <class T>
 /**
  * Defines minimal unsigned integer type
  * that is capable of holding T's bit representation.
@@ -148,6 +149,7 @@ template <class T>
  * is capable of holding T's bit representation.
  * Use ecsl::has_unsigned_minimal_integer<T>::value to check
  */
+template <class T>
 struct unsigned_minimal_integer
 {
     using type = detail::unsigned_minimal_integer_trait<T>;
@@ -156,11 +158,12 @@ struct unsigned_minimal_integer
 template<class T>
 using unsigned_minimal_integer_t = typename unsigned_minimal_integer<T>::type;
 
+/**
+ * may be std::true_type or std::false_type
+ */
 template<class T>
-/* may be std::true_type or std::false_type */
 using has_unsigned_minimal_integer = detail::has_unsigned_minimal_integer_trait<T>;
 
-template <class T>
 /**
  * Defines minimal integer (signed or not is not specified) type
  * that is capable of holding T's bit representation.
@@ -168,6 +171,7 @@ template <class T>
  * is capable of holding T's bit representation.
  * Use ecsl::has_minimal_integer<T>::value to check
  */
+template <class T>
 struct minimal_integer
 {
     using type = detail::unsigned_minimal_integer_trait<T>;
@@ -176,8 +180,10 @@ struct minimal_integer
 template<class T>
 using minimal_integer_t = typename minimal_integer<T>::type;
 
+/**
+ * may be std::true_type or std::false_type
+ */
 template<class T>
-/* may be std::true_type or std::false_type */
 using has_minimal_integer = detail::has_unsigned_minimal_integer_trait<T>;
 
 } // namespace ecsl

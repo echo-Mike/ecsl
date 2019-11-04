@@ -7,220 +7,14 @@
  */
 
 /// STD
-#include <new>
 #include <mutex>
 #include <utility>
-#include <stdexcept>
 #include <type_traits>
 /// ECSL
-#include <ecsl/utility/Launder.hpp>
+#include <ecsl/utility/Storage.hpp>
 #include <ecsl/type_traits/DefaultTag.hpp>
 
 namespace ecsl {
-
-/**
- * Type of policy to be used in singleton template family
- */
-enum class singleton_policy
-{
-    /**
-     * Implements access to singleton object with proper checks of it's
-     * lifetime. May not be sutable for overaligned types
-     */
-    SAFE,
-    /**
-     * Same as SAFE but throws when object is accessed not within it's lifetime
-     */
-    SAFE_THROWING,
-    /**
-     * Implements access to singleton object without any checks of it's
-     * lifetime. Sutable for overaligned types
-     */
-    NOT_SAFE,
-};
-
-namespace detail {
-namespace singleton {
-
-/**
- * Simple trait to clean object type from various qualifiers and define
- * sutable storage for object binary representation
- */
-template<class T>
-struct value_trait
-{
-    using value_type    = typename std::remove_cv<typename std::remove_reference<T>::type>::type;
-    using reference     = typename std::add_lvalue_reference<value_type>::type;
-    using pointer       = typename std::add_pointer<value_type>::type;
-    using storage_type  = typename std::aligned_storage<sizeof(value_type), alignof(value_type)>::type;
-};
-
-/**
- * Storage that implements singleton_policy::NOT_SAFE policy.
- * Uses launder to access object and do no check that it is within it's lifetime
- */
-template<class T, singleton_policy policy = singleton_policy::SAFE>
-class storage
-{
-    using vt_t = value_trait<T>;
-    typename vt_t::storage_type m_storage;
-
-  public:
-    using value_type    = typename vt_t::value_type;
-    using reference     = typename vt_t::reference;
-    using pointer       = typename vt_t::pointer;
-
-    storage() = default;
-
-    inline reference instance() noexcept
-    {
-        return *launder<pointer>(&m_storage);
-    }
-
-    template<class ... Args>
-    inline typename std::enable_if<
-        std::is_constructible<value_type, Args...>::value,
-        reference
-    >::type construct(Args&& ... args)
-        noexcept(std::is_nothrow_constructible<value_type, Args...>::value)
-    {
-        auto* obj_ptr = new(&m_storage) value_type(std::forward<Args>(args)...);
-        return *obj_ptr;
-    }
-
-    inline void destroy()
-        noexcept(std::is_nothrow_destructible<value_type>::value)
-    {
-        launder<pointer>(&m_storage)->~value_type();
-    }
-
-    ~storage()
-        noexcept(std::is_nothrow_destructible<value_type>::value)
-    {
-        destroy();
-    }
-};
-
-/**
- * Storage that implements singleton_policy::SAFE policy.
- * Uses pointer member to access object and checks lifetime of object when
- * constructed (explicit call to construct) and destructed
- */
-template<class T>
-class storage<T, singleton_policy::SAFE>
-{
-    using vt_t = value_trait<T>;
-    typename vt_t::pointer m_pointer;
-    typename vt_t::storage_type m_storage;
-
-  public:
-    using value_type    = typename vt_t::value_type;
-    using reference     = typename vt_t::reference;
-    using pointer       = typename vt_t::pointer;
-
-    storage() noexcept : m_pointer{nullptr}, m_storage{} {}
-
-    inline reference instance() noexcept
-    {   //? This will trigger SIGSEGV if singleton was not initialized
-        return *m_pointer;
-    }
-
-    template<class ... Args>
-    inline typename std::enable_if<
-        std::is_constructible<value_type, Args...>::value,
-        reference
-    >::type construct(Args&& ... args)
-        noexcept(std::is_nothrow_constructible<value_type, Args...>::value)
-    {
-        if (!m_pointer)
-            m_pointer = new(&m_storage) value_type(std::forward<Args>(args)...);
-        return *m_pointer;
-    }
-
-    inline void destroy()
-        noexcept(std::is_nothrow_destructible<value_type>::value)
-    {
-        if (m_pointer)
-        {
-            m_pointer->~value_type();
-            m_pointer = nullptr;
-        }
-    }
-
-    ~storage()
-        noexcept(std::is_nothrow_destructible<value_type>::value)
-    {
-        destroy();
-    }
-};
-
-/**
- * Storage that implements singleton_policy::SAFE_THROWING policy.
- * Same as storage with singleton_policy::SAFE, but throws when object is
- * accessed via instance and not within it's lifetime where
- * storage with singleton_policy::SAFE calls segfault.
- */
-template<class T>
-class storage<T, singleton_policy::SAFE_THROWING>
-{
-    using vt_t = value_trait<T>;
-    typename vt_t::pointer m_pointer;
-    typename vt_t::storage_type m_storage;
-
-  public:
-    using value_type    = typename vt_t::value_type;
-    using reference     = typename vt_t::reference;
-    using pointer       = typename vt_t::pointer;
-
-    class lifetime_error : public std::runtime_error
-    {
-      public:
-        explicit lifetime_error(const std::string& str) :
-            std::runtime_error(str) {}
-        explicit lifetime_error(const char* c_str) :
-            std::runtime_error(c_str) {}
-    };
-
-    storage() noexcept : m_pointer{nullptr}, m_storage{} {}
-
-    inline reference instance()
-    {
-        if (!m_pointer)
-            throw lifetime_error{"Stored object is not within it's lifetime"};
-        return *m_pointer;
-    }
-
-    template<class ... Args>
-    inline typename std::enable_if<
-        std::is_constructible<value_type, Args...>::value,
-        reference
-    >::type construct(Args&& ... args)
-        noexcept(std::is_nothrow_constructible<value_type, Args...>::value)
-    {
-        if (!m_pointer)
-            m_pointer = new(&m_storage) value_type(std::forward<Args>(args)...);
-        return *m_pointer;
-    }
-
-    inline void destroy()
-        noexcept(std::is_nothrow_destructible<value_type>::value)
-    {
-        if (m_pointer)
-        {
-            m_pointer->~value_type();
-            m_pointer = nullptr;
-        }
-    }
-
-    ~storage()
-        noexcept(std::is_nothrow_destructible<value_type>::value)
-    {
-        destroy();
-    }
-};
-
-} // namespace singleton
-} // namespace detail
 
 /**
  * @brief Non-CRTP singleton implementation.
@@ -233,11 +27,11 @@ class storage<T, singleton_policy::SAFE_THROWING>
 template<
     class T,
     class TagType = default_tag,
-    singleton_policy policy = singleton_policy::SAFE
+    storage_policy policy = storage_policy::SAFE
 >
 class singleton
 {
-    using storeage_t = detail::singleton::storage<T, policy>;
+    using storeage_t = storage<T, policy>;
     storeage_t m_storage;
 
     static singleton& get_instance() noexcept
@@ -253,9 +47,9 @@ class singleton
     using tag_type      = TagType;
 
     static reference instance()
-        noexcept(noexcept(storeage_t().instance()))
+        noexcept(noexcept(storeage_t().get_reference()))
     {
-        return get_instance().m_storage.instance();
+        return get_instance().m_storage.get_reference();
     }
 
     static void destroy()
@@ -290,11 +84,11 @@ template<
     class T,
     class Mutex = std::mutex,
     class TagType = default_tag,
-    singleton_policy policy = singleton_policy::SAFE
+    storage_policy policy = storage_policy::SAFE
 >
 class mutex_protected_singleton
 {
-    using storeage_t = detail::singleton::storage<T, policy>;
+    using storeage_t = storage<T, policy>;
     Mutex m_mu;
     storeage_t m_storage;
 
@@ -314,20 +108,20 @@ class mutex_protected_singleton
     using accessor_type = std::pair<reference, lock_type>;
 
     static accessor_type instance()
-        noexcept(noexcept(storeage_t().instance()))
+        noexcept(noexcept(storeage_t().get_reference()))
     {
         auto& s = get_instance();
         auto l = lock_type(s.m_mu);
-        return {s.m_storage.instance(), std::move(l)};
+        return {s.m_storage.get_reference(), std::move(l)};
     }
 
     template<class lock_policy = std::try_to_lock_t>
     static accessor_type instance(lock_policy lp)
-        noexcept(noexcept(storeage_t().instance()))
+        noexcept(noexcept(storeage_t().get_reference()))
     {
         auto& s = get_instance();
         auto l = lock_type(s.m_mu, lp);
-        return {s.m_storage.instance(), std::move(l)};
+        return {s.m_storage.get_reference(), std::move(l)};
     }
 
     static void destroy()
@@ -364,11 +158,11 @@ class mutex_protected_singleton
 template<
     class T,
     class TagType = default_tag,
-    singleton_policy policy = singleton_policy::SAFE
+    storage_policy policy = storage_policy::SAFE
 >
 class thread_local_singleton
 {
-    using storeage_t = detail::singleton::storage<T, policy>;
+    using storeage_t = storage<T, policy>;
     storeage_t m_storage;
 
     static thread_local_singleton& get_instance() noexcept
@@ -384,9 +178,9 @@ class thread_local_singleton
     using tag_type      = TagType;
 
     static reference instance()
-        noexcept(noexcept(storeage_t().instance()))
+        noexcept(noexcept(storeage_t().get_reference()))
     {
-        return get_instance().m_storage.instance();
+        return get_instance().m_storage.get_reference();
     }
 
     static void destroy()

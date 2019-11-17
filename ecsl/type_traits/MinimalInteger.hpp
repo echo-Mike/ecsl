@@ -98,7 +98,7 @@ using unsigned_minimal_integer_trait = typename minimal_integer_trait_cond<
     typename unsigned_minimal_integer_trait_helper<T>::type
 >::type;
 
-template <class T>
+template<class T>
 using has_signed_minimal_integer_trait = typename std::conditional<
     std::is_same<
         void,
@@ -108,7 +108,7 @@ using has_signed_minimal_integer_trait = typename std::conditional<
     std::true_type
 >::type;
 
-template <class T>
+template<class T>
 using has_unsigned_minimal_integer_trait = typename std::conditional<
     std::is_same<
         void,
@@ -127,7 +127,7 @@ using has_unsigned_minimal_integer_trait = typename std::conditional<
  * is capable of holding T's bit representation.
  * Use ecsl::has_signed_minimal_integer<T>::value to check
  */
-template <class T>
+template<class T>
 struct signed_minimal_integer
 {
     using type = detail::signed_minimal_integer_trait<T>;
@@ -149,7 +149,7 @@ using has_signed_minimal_integer = detail::has_signed_minimal_integer_trait<T>;
  * is capable of holding T's bit representation.
  * Use ecsl::has_unsigned_minimal_integer<T>::value to check
  */
-template <class T>
+template<class T>
 struct unsigned_minimal_integer
 {
     using type = detail::unsigned_minimal_integer_trait<T>;
@@ -171,7 +171,7 @@ using has_unsigned_minimal_integer = detail::has_unsigned_minimal_integer_trait<
  * is capable of holding T's bit representation.
  * Use ecsl::has_minimal_integer<T>::value to check
  */
-template <class T>
+template<class T>
 struct minimal_integer
 {
     using type = detail::unsigned_minimal_integer_trait<T>;

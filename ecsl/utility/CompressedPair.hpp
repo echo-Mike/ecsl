@@ -28,7 +28,7 @@ namespace ecsl {
  * members is done by the means of member functions, not members themselves,
  * a.e. functions get_first/get_second are derfined.
  */
-template <class T1, class T2,
+template<class T1, class T2,
     bool = std::is_empty<T1>::value,
     bool = std::is_empty<T2>::value>
 class compressed_pair :
@@ -40,7 +40,7 @@ class compressed_pair :
     using second_type = T2;
 
   private:
-    template <
+    template<
         class ... Args1, std::size_t ... Index1
         class ... Args2, std::size_t ... Index2
     >
@@ -218,7 +218,7 @@ class compressed_pair :
     const second_type& get_second() const { return *this; }
 };
 
-template <class T1, class T2>
+template<class T1, class T2>
 class compressed_pair<T1, T2, true, false> :
     private T1
 {
@@ -227,7 +227,7 @@ class compressed_pair<T1, T2, true, false> :
     using second_type = T2;
 
   private:
-    template <
+    template<
         class ... Args1, std::size_t ... Index1
         class ... Args2, std::size_t ... Index2
     >
@@ -408,7 +408,7 @@ class compressed_pair<T1, T2, true, false> :
     second_type m_second;
 };
 
-template <class T1, class T2>
+template<class T1, class T2>
 class compressed_pair<T1, T2, false, true> :
     private T2
 {
@@ -417,7 +417,7 @@ class compressed_pair<T1, T2, false, true> :
     using second_type = T2;
 
   private:
-    template <
+    template<
         class ... Args1, std::size_t ... Index1
         class ... Args2, std::size_t ... Index2
     >
@@ -598,10 +598,10 @@ class compressed_pair<T1, T2, false, true> :
     first_type m_first;
 };
 
-template <class T1, class T2>
+template<class T1, class T2>
 class compressed_pair<T1, T2, false, false>
 {
-    template <
+    template<
         class ... Args1, std::size_t ... Index1
         class ... Args2, std::size_t ... Index2
     >

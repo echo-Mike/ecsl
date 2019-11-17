@@ -23,7 +23,7 @@ namespace ecsl {
  * @tparam U Deduced type of object storage
  * @param[in] p Pointer to object's storage
  */
-template <class T, class U>
+template<class T, class U>
 [[nodiscard]] constexpr T launder(U* p) noexcept
 {
     #if defined(__cpp_lib_launder)

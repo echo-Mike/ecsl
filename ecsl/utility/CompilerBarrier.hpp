@@ -17,7 +17,7 @@ namespace ecsl {
  * Usable with ecsl::prefetch functions
  * Is same as ecsl::compiler_barrier and ecsl::privent_reorder
  */
-inline void reorder_barrier()
+inline void reorder_barrier() noexcept
 {
     std::atomic_signal_fence(std::memory_order_seq_cst);
 }
@@ -28,7 +28,7 @@ inline void reorder_barrier()
  * Usable with ecsl::prefetch functions
  * Is same as ecsl::reorder_barrier and ecsl::privent_reorder
  */
-inline void compiler_barrier()
+inline void compiler_barrier() noexcept
 {
     std::atomic_signal_fence(std::memory_order_seq_cst);
 }
@@ -39,7 +39,7 @@ inline void compiler_barrier()
  * Usable with ecsl::prefetch functions
  * Is same as ecsl::compiler_barrier and ecsl::reorder_barrier
  */
-inline void privent_reorder()
+inline void privent_reorder() noexcept
 {
     std::atomic_signal_fence(std::memory_order_seq_cst);
 }

@@ -82,7 +82,7 @@ enum level : int
 
 #if defined(ECSL_COMPILER_MSVC)
 template<state s, level l>
-void prefetch_impl(const void* ptr)
+void prefetch_impl(const void* ptr) noexcept
 {
 #   if defined(_M_ARM) || defined(_M_ARM64)
     __prefetch(ptr);
@@ -91,10 +91,10 @@ void prefetch_impl(const void* ptr)
 #endif
 }
 #elif defined(ECSL_COMPILER_UNKNOWN)
-template<state, level> void prefetch_impl(const void*) {}
+template<state, level> void prefetch_impl(const void*) noexcept {}
 #else
 template<state s, level l>
-void prefetch_impl(const void* ptr)
+void prefetch_impl(const void* ptr) noexcept
 {
     __builtin_prefetch(ptr, static_cast<int>(s), static_cast<int>(l));
 }
@@ -109,7 +109,7 @@ namespace prefetch {
  * Prefetch a cache line in SHARED state into all cache levels
  * @param ptr Address to prefetch
  */
-inline void l0_r(const void* ptr)
+inline void l0_r(const void* ptr) noexcept
 {
     using namespace detail::prefetch;
     prefetch_impl<read, L0>(ptr);
@@ -119,7 +119,7 @@ inline void l0_r(const void* ptr)
  * levels except the 0th cache level
  * @param ptr Address to prefetch
  */
-inline void l1_r(const void* ptr)
+inline void l1_r(const void* ptr) noexcept
 {
     using namespace detail::prefetch;
     prefetch_impl<read, L1>(ptr);
@@ -129,7 +129,7 @@ inline void l1_r(const void* ptr)
  * levels except the 0th and 1th cache levels
  * @param ptr Address to prefetch
  */
-inline void l2_r(const void* ptr)
+inline void l2_r(const void* ptr) noexcept
 {
     using namespace detail::prefetch;
     prefetch_impl<read, L2>(ptr);
@@ -142,7 +142,7 @@ inline void l2_r(const void* ptr)
  * l0_r function which imply that prefetched data to use repeatedly.
  * @param ptr Address to prefetch
  */
-inline void nt_r(const void* ptr)
+inline void nt_r(const void* ptr) noexcept
 {
     using namespace detail::prefetch;
     prefetch_impl<read, NT>(ptr);
@@ -152,7 +152,7 @@ inline void nt_r(const void* ptr)
  * Prefetch a cache line in EXCLUSIVE state into all cache levels
  * @param ptr Address to prefetch
  */
-inline void l0_m(const void* ptr)
+inline void l0_m(const void* ptr) noexcept
 {
     using namespace detail::prefetch;
     prefetch_impl<modify, L0>(ptr);
@@ -162,7 +162,7 @@ inline void l0_m(const void* ptr)
  * levels except the 0th cache level
  * @param ptr Address to prefetch
  */
-inline void l1_m(const void* ptr)
+inline void l1_m(const void* ptr) noexcept
 {
     using namespace detail::prefetch;
     prefetch_impl<modify, L1>(ptr);
@@ -172,7 +172,7 @@ inline void l1_m(const void* ptr)
  * levels except the 0th and 1th cache levels
  * @param ptr Address to prefetch
  */
-inline void l2_m(const void* ptr)
+inline void l2_m(const void* ptr) noexcept
 {
     using namespace detail::prefetch;
     prefetch_impl<modify, L2>(ptr);
@@ -185,7 +185,7 @@ inline void l2_m(const void* ptr)
  * l0_m function which imply that prefetched data to use repeatedly.
  * @param ptr Address to prefetch
  */
-inline void nt_m(const void* ptr)
+inline void nt_m(const void* ptr) noexcept
 {
     using namespace detail::prefetch;
     prefetch_impl<modify, NT>(ptr);
@@ -195,7 +195,7 @@ inline void nt_m(const void* ptr)
  * Default prefetch operation to L0
  * @param ptr Address to prefetch
  */
-inline void l0(const void* ptr)
+inline void l0(const void* ptr) noexcept
 {
     l0_m(ptr);
 }
@@ -203,7 +203,7 @@ inline void l0(const void* ptr)
  * Default prefetch operation to L1
  * @param ptr Address to prefetch
  */
-inline void l1(const void* ptr)
+inline void l1(const void* ptr) noexcept
 {
     l1_m(ptr);
 }
@@ -211,7 +211,7 @@ inline void l1(const void* ptr)
  * Default prefetch operation to L2
  * @param ptr Address to prefetch
  */
-inline void l2(const void* ptr)
+inline void l2(const void* ptr) noexcept
 {
     l2_m(ptr);
 }
@@ -219,7 +219,7 @@ inline void l2(const void* ptr)
  * Default operation for non-temporal prefetch
  * @param ptr Address to prefetch
  */
-inline void nt(const void* ptr)
+inline void nt(const void* ptr) noexcept
 {
     nt_m(ptr);
 }

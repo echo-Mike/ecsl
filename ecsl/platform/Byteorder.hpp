@@ -95,17 +95,17 @@ enum class os_
 #endif
 };
 
-template<class T> T simple_bswap(T);
+template<class T> T simple_bswap(T) noexcept;
 
 template<>
-inline std::uint16_t simple_bswap<std::uint16_t>(std::uint16_t x)
+inline std::uint16_t simple_bswap<std::uint16_t>(std::uint16_t x) noexcept
 {
     return ((x & 0x00ff) << 8) |
            ((x & 0xff00) >> 8);
 }
 
 template<>
-inline std::uint32_t simple_bswap<std::uint32_t>(std::uint32_t x)
+inline std::uint32_t simple_bswap<std::uint32_t>(std::uint32_t x) noexcept
 {
     return (( x & 0x000000ffU ) << 24) |
            (( x & 0x0000ff00U ) <<  8) |
@@ -114,7 +114,7 @@ inline std::uint32_t simple_bswap<std::uint32_t>(std::uint32_t x)
 }
 
 template<>
-inline std::uint64_t simple_bswap<std::uint64_t>(std::uint64_t x)
+inline std::uint64_t simple_bswap<std::uint64_t>(std::uint64_t x) noexcept
 {
     return (( x & 0x00000000000000ffULL ) << 56) |
            (( x & 0x000000000000ff00ULL ) << 40) |
@@ -130,7 +130,7 @@ template<class T,
     compiler::type = compiler::type::value,
     os_ = os_::value
 >
-T intrinsic_bswap(T x)
+T intrinsic_bswap(T x) noexcept
 {   // Case for compiler::type::compiler_unknown and os_::os_unknown
     return simple_bswap(x);
 }
@@ -142,7 +142,7 @@ T intrinsic_bswap(T x)
 #if ECSL_COMPILER_VERSION_CHECK(GE, 4,8)
 template<>
 std::uint16_t intrinsic_bswap<std::uint16_t,
-    compiler::type::compiler_gcc, os_::value>(std::uint16_t x)
+    compiler::type::compiler_gcc, os_::value>(std::uint16_t x) noexcept
 {
     return __builtin_bswap16(x);
 }
@@ -151,14 +151,14 @@ std::uint16_t intrinsic_bswap<std::uint16_t,
 #if ECSL_COMPILER_VERSION_CHECK(GE, 4,7,7)
 template<>
 std::uint32_t intrinsic_bswap<std::uint32_t,
-    compiler::type::compiler_gcc, os_::value>(std::uint32_t x)
+    compiler::type::compiler_gcc, os_::value>(std::uint32_t x) noexcept
 {
     return __builtin_bswap32(x);
 }
 
 template<>
 std::uint64_t intrinsic_bswap<std::uint64_t,
-    compiler::type::compiler_gcc, os_::value>(std::uint64_t x)
+    compiler::type::compiler_gcc, os_::value>(std::uint64_t x) noexcept
 {
     return __builtin_bswap64(x);
 }
@@ -171,7 +171,7 @@ std::uint64_t intrinsic_bswap<std::uint64_t,
 #if ECSL_COMPILER_VERSION_CHECK(GE, 3,2)
 template<>
 std::uint16_t intrinsic_bswap<std::uint16_t,
-    compiler::type::compiler_clang, os_::value>(std::uint16_t x)
+    compiler::type::compiler_clang, os_::value>(std::uint16_t x) noexcept
 {
     return __builtin_bswap16(x);
 }
@@ -180,14 +180,14 @@ std::uint16_t intrinsic_bswap<std::uint16_t,
 #if ECSL_COMPILER_VERSION_CHECK(GE, 3,0)
 template<>
 std::uint32_t intrinsic_bswap<std::uint32_t,
-    compiler::type::compiler_clang, os_::value>(std::uint32_t x)
+    compiler::type::compiler_clang, os_::value>(std::uint32_t x) noexcept
 {
     return __builtin_bswap32(x);
 }
 
 template<>
 std::uint64_t intrinsic_bswap<std::uint64_t,
-    compiler::type::compiler_clang, os_::value>(std::uint64_t x)
+    compiler::type::compiler_clang, os_::value>(std::uint64_t x) noexcept
 {
     return __builtin_bswap64(x);
 }
@@ -200,14 +200,14 @@ std::uint64_t intrinsic_bswap<std::uint64_t,
 #if ECSL_COMPILER_VERSION_CHECK(GE, 16,0)
 template<>
 std::uint16_t intrinsic_bswap<std::uint16_t,
-    compiler::type::compiler_icc, os_::value>(std::uint16_t x)
+    compiler::type::compiler_icc, os_::value>(std::uint16_t x) noexcept
 {
     return __builtin_bswap16(x);
 }
 #else
 template<>
 std::uint16_t intrinsic_bswap<std::uint16_t,
-    compiler::type::compiler_icc, os_::value>(std::uint16_t x)
+    compiler::type::compiler_icc, os_::value>(std::uint16_t x) noexcept
 {
     return _bswap16(x);
 }
@@ -216,26 +216,26 @@ std::uint16_t intrinsic_bswap<std::uint16_t,
 #if ECSL_COMPILER_VERSION_CHECK(GE, 13,0)
 template<>
 std::uint32_t intrinsic_bswap<std::uint32_t,
-    compiler::type::compiler_icc, os_::value>(std::uint32_t x)
+    compiler::type::compiler_icc, os_::value>(std::uint32_t x) noexcept
 {
     return __builtin_bswap32(x);
 }
 template<>
 std::uint64_t intrinsic_bswap<std::uint64_t,
-    compiler::type::compiler_icc, os_::value>(std::uint64_t x)
+    compiler::type::compiler_icc, os_::value>(std::uint64_t x) noexcept
 {
     return __builtin_bswap64(x);
 }
 #else
 template<>
 std::uint32_t intrinsic_bswap<std::uint32_t,
-    compiler::type::compiler_icc, os_::value>(std::uint32_t x)
+    compiler::type::compiler_icc, os_::value>(std::uint32_t x) noexcept
 {
     return _bswap(x);
 }
 template<>
 std::uint64_t intrinsic_bswap<std::uint64_t,
-    compiler::type::compiler_icc, os_::value>(std::uint64_t x)
+    compiler::type::compiler_icc, os_::value>(std::uint64_t x) noexcept
 {
     return _bswap64(x);
 }
@@ -247,21 +247,21 @@ std::uint64_t intrinsic_bswap<std::uint64_t,
 
 template<>
 std::uint16_t intrinsic_bswap<std::uint16_t,
-    compiler::type::compiler_msvc, os_::value>(std::uint16_t x)
+    compiler::type::compiler_msvc, os_::value>(std::uint16_t x) noexcept
 {
     return _byteswap_ushort(x);
 }
 
 template<>
 std::uint32_t intrinsic_bswap<std::uint32_t,
-    compiler::type::compiler_msvc, os_::value>(std::uint32_t x)
+    compiler::type::compiler_msvc, os_::value>(std::uint32_t x) noexcept
 {
     return _byteswap_ulong(x);
 }
 
 template<>
 std::uint64_t intrinsic_bswap<std::uint64_t,
-    compiler::type::compiler_msvc, os_::value>(std::uint64_t x)
+    compiler::type::compiler_msvc, os_::value>(std::uint64_t x) noexcept
 {
     return _byteswap_uint64(x);
 }
@@ -275,19 +275,19 @@ std::uint64_t intrinsic_bswap<std::uint64_t,
 
 template<>
 std::uint16_t intrinsic_bswap<std::uint16_t,
-    compiler::type::compiler_unknown, os_::os_apple>(std::uint16_t x)
+    compiler::type::compiler_unknown, os_::os_apple>(std::uint16_t x) noexcept
 {
     return OSSwapInt16(x);
 }
 template<>
 std::uint32_t intrinsic_bswap<std::uint32_t,
-    compiler::type::compiler_unknown, os_::os_apple>(std::uint32_t x)
+    compiler::type::compiler_unknown, os_::os_apple>(std::uint32_t x) noexcept
 {
     return OSSwapInt32(x);
 }
 template<>
 std::uint64_t intrinsic_bswap<std::uint64_t,
-    compiler::type::compiler_unknown, os_::os_apple>(std::uint64_t x)
+    compiler::type::compiler_unknown, os_::os_apple>(std::uint64_t x) noexcept
 {
     return OSSwapInt64(x);
 }
@@ -296,19 +296,19 @@ std::uint64_t intrinsic_bswap<std::uint64_t,
 
 template<>
 std::uint16_t intrinsic_bswap<std::uint16_t,
-    compiler::type::compiler_unknown, os_::os_sun>(std::uint16_t x)
+    compiler::type::compiler_unknown, os_::os_sun>(std::uint16_t x) noexcept
 {
     return BSWAP_16(x);
 }
 template<>
 std::uint32_t intrinsic_bswap<std::uint32_t,
-    compiler::type::compiler_unknown, os_::os_sun>(std::uint32_t x)
+    compiler::type::compiler_unknown, os_::os_sun>(std::uint32_t x) noexcept
 {
     return BSWAP_32(x);
 }
 template<>
 std::uint64_t intrinsic_bswap<std::uint64_t,
-    compiler::type::compiler_unknown, os_::os_sun>(std::uint64_t x)
+    compiler::type::compiler_unknown, os_::os_sun>(std::uint64_t x) noexcept
 {
     return BSWAP_64(x);
 }
@@ -317,19 +317,19 @@ std::uint64_t intrinsic_bswap<std::uint64_t,
 
 template<>
 std::uint16_t intrinsic_bswap<std::uint16_t,
-    compiler::type::compiler_unknown, os_::os_freebsd>(std::uint16_t x)
+    compiler::type::compiler_unknown, os_::os_freebsd>(std::uint16_t x) noexcept
 {
     return bswap16(x);
 }
 template<>
 std::uint32_t intrinsic_bswap<std::uint32_t,
-    compiler::type::compiler_unknown, os_::os_freebsd>(std::uint32_t x)
+    compiler::type::compiler_unknown, os_::os_freebsd>(std::uint32_t x) noexcept
 {
     return bswap32(x);
 }
 template<>
 std::uint64_t intrinsic_bswap<std::uint64_t,
-    compiler::type::compiler_unknown, os_::os_freebsd>(std::uint64_t x)
+    compiler::type::compiler_unknown, os_::os_freebsd>(std::uint64_t x) noexcept
 {
     return bswap64(x);
 }
@@ -338,19 +338,19 @@ std::uint64_t intrinsic_bswap<std::uint64_t,
 
 template<>
 std::uint16_t intrinsic_bswap<std::uint16_t,
-    compiler::type::compiler_unknown, os_::os_openbsd>(std::uint16_t x)
+    compiler::type::compiler_unknown, os_::os_openbsd>(std::uint16_t x) noexcept
 {
     return swap16(x);
 }
 template<>
 std::uint32_t intrinsic_bswap<std::uint32_t,
-    compiler::type::compiler_unknown, os_::os_openbsd>(std::uint32_t x)
+    compiler::type::compiler_unknown, os_::os_openbsd>(std::uint32_t x) noexcept
 {
     return swap32(x);
 }
 template<>
 std::uint64_t intrinsic_bswap<std::uint64_t,
-    compiler::type::compiler_unknown, os_::os_openbsd>(std::uint64_t x)
+    compiler::type::compiler_unknown, os_::os_openbsd>(std::uint64_t x) noexcept
 {
     return swap64(x);
 }
@@ -362,55 +362,55 @@ std::uint64_t intrinsic_bswap<std::uint64_t,
 } // namespace detail
 
 template<class T>
-T bswap(T x)
+T bswap(T x) noexcept
 {
     return detail::byteorder::intrinsic_bswap(x);
 }
 
 template<class T, endianness = endianness::value>
-T to_big_endian(T x)
+T to_big_endian(T x) noexcept
 {
     return x;
 }
 
 template<class T>
-T to_big_endian<T, endianness::little_endian>(T x)
+T to_big_endian<T, endianness::little_endian>(T x) noexcept
 {
     return bswap(x);
 }
 
 template<class T, endianness = endianness::value>
-T from_big_endian(T x)
+T from_big_endian(T x) noexcept
 {
     return x;
 }
 
 template<class T>
-T from_big_endian<T, endianness::little_endian>(T x)
+T from_big_endian<T, endianness::little_endian>(T x) noexcept
 {
     return bswap(x);
 }
 
 template<class T, endianness = endianness::value>
-T to_little_endian(T x)
+T to_little_endian(T x) noexcept
 {
     return x;
 }
 
 template<class T>
-T to_little_endian<T, endianness::big_endian>(T x)
+T to_little_endian<T, endianness::big_endian>(T x) noexcept
 {
     return bswap(x);
 }
 
 template<class T, endianness = endianness::value>
-T from_little_endian(T x)
+T from_little_endian(T x) noexcept
 {
     return x;
 }
 
 template<class T>
-T from_little_endian<T, endianness::big_endian>(T x)
+T from_little_endian<T, endianness::big_endian>(T x) noexcept
 {
     return bswap(x);
 }

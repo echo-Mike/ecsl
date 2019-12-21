@@ -20,7 +20,7 @@ namespace ecsl {
  * @tparam U C++11 enum class type
  */
 template<class T, class U>
-constexpr T enum_cast(U enum_class_value)
+constexpr T enum_cast(U enum_class_value) noexcept
 {
     return static_cast<T>(static_cast<typename std::underlying_type<U>::type>(enum_class_value));
 }

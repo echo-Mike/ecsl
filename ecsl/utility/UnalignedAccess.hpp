@@ -109,7 +109,7 @@ template<class T>
 inline typename std::enable_if<
     std::is_trivial<T>::value,
     T
->::type load_weak(const void* ptr)
+>::type load_weak(const void* ptr) noexcept
 {
     using TT = typename std::add_pointer<typename std::add_const<T>::type>::type;
     return *reinterpret_cast<TT>(ptr);
@@ -149,13 +149,13 @@ namespace detail {
 namespace unaligned_access {
 
 template<class memory_type>
-inline memory_type* field_get_ptr(memory_type* ptr, std::size_t offset)
+inline memory_type* field_get_ptr(memory_type* ptr, std::size_t offset) noexcept
 {
     return ptr + offset;
 }
 
 template<class memory_type, class T, class M>
-inline M field_load_weak(memory_type* ptr, std::size_t offset, M T::*)
+inline M field_load_weak(memory_type* ptr, std::size_t offset, M T::*) noexcept
 {
     return ecsl::load_weak<M>(ptr + offset);
 }
@@ -164,43 +164,44 @@ inline M field_load_weak(memory_type* ptr, std::size_t offset, M T::*)
 //? the type of M may be deduced from dst
 //? but it is left as is to do an additional type check
 template<class memory_type, class T, class M>
-inline void field_load_weak(M* dst, memory_type* src, std::size_t offset, M T::*)
+inline void field_load_weak(M* dst, memory_type* src, std::size_t offset, M T::*) noexcept
 {
     ecsl::load_weak(dst, src + offset);
 }
 
 template<class memory_type, class T, class M>
-inline void field_load_weak(M& dst, memory_type* src, std::size_t offset, M T::*)
+inline void field_load_weak(M& dst, memory_type* src, std::size_t offset, M T::*) noexcept
 {
     ecsl::load_weak(dst, src + offset);
 }
 
 template<class memory_type, class T, class M>
 inline M field_load_unaligned(memory_type* ptr, std::size_t offset, M T::*)
+    noexcept(noexcept(ecsl::load_unaligned<M>(ptr + offset)))
 {
     return ecsl::load_unaligned<M>(ptr + offset);
 }
 
 template<class memory_type, class T, class M>
-inline void field_load_unaligned(M* dst, memory_type* src, std::size_t offset, M T::*)
+inline void field_load_unaligned(M* dst, memory_type* src, std::size_t offset, M T::*) noexcept
 {
     ecsl::load_unaligned(dst, src + offset);
 }
 
 template<class memory_type, class T, class M>
-inline void field_load_unaligned(M& dst, memory_type* src, std::size_t offset, M T::*)
+inline void field_load_unaligned(M& dst, memory_type* src, std::size_t offset, M T::*) noexcept
 {
     ecsl::load_unaligned(dst, src + offset);
 }
 
 template<class memory_type, class T, class M>
-inline void field_store_unaligned(memory_type* dst, const M* src, std::size_t offset, M T::*)
+inline void field_store_unaligned(memory_type* dst, const M* src, std::size_t offset, M T::*) noexcept
 {
     ecsl::store_unaligned(dst, src + offset);
 }
 
 template<class memory_type, class T, class M>
-inline void field_store_unaligned(memory_type* dst, const M& src, std::size_t offset, M T::*)
+inline void field_store_unaligned(memory_type* dst, const M& src, std::size_t offset, M T::*) noexcept
 {
     ecsl::store_unaligned(dst, src + offset);
 }

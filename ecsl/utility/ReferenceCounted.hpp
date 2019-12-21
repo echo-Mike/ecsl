@@ -292,7 +292,7 @@ template<class T>
 typename std::enable_if<
     detail::ref_counted::is_derived_from_irc_<T>::value,
     reference_counter_pointer<T>
->::type make_ref_count_ptr(T* obj)
+>::type make_ref_count_ptr(T* obj) noexcept
 {
     return reference_counter_pointer<T>{obj};
 }
@@ -304,7 +304,7 @@ template<class T>
 typename std::enable_if<
     detail::ref_counted::is_derived_from_irc_<T>::value,
     reference_counter_pointer<T>
->::type make_ref_count_ptr(T& obj)
+>::type make_ref_count_ptr(T& obj) noexcept
 {
     return reference_counter_pointer<T>{&obj};
 }
@@ -317,7 +317,7 @@ template<class T>
 typename std::enable_if<
     detail::ref_counted::is_derived_from_irc_<T>::value,
     reference_counter_pointer<T>
->::type make_ref_count_ptr(T* obj, adopt_reference)
+>::type make_ref_count_ptr(T* obj, adopt_reference) noexcept
 {
     return reference_counter_pointer<T>{obj, adopt_reference{}};
 }
@@ -330,7 +330,7 @@ template<class T>
 typename std::enable_if<
     detail::ref_counted::is_derived_from_irc_<T>::value,
     reference_counter_pointer<T>
->::type make_ref_count_ptr(T& obj, adopt_reference)
+>::type make_ref_count_ptr(T& obj, adopt_reference) noexcept
 {
     return reference_counter_pointer<T>{&obj, adopt_reference{}};
 }

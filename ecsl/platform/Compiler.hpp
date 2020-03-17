@@ -144,6 +144,8 @@
 #   define ECSL_COMPILER_NAME "unknown"
 #endif
 
+#if defined(__cplusplus)
+
 namespace ecsl {
 namespace compiler {
 
@@ -197,4 +199,6 @@ inline const char* name() noexcept
 
 } // namespace compiler
 } // namespace ecsl
+
+#endif /* __cplusplus */
 #endif /* ECSL_PLATFORM_COMPILER_HPP_ */

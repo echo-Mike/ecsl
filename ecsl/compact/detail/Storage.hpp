@@ -43,7 +43,7 @@ struct storage
 
     template<class F, class ... Args>
     inline void modify(as_param, F&& func, Args&&... args)
-        // TODO: add noexcept clause
+        noexcept(std::is_nothrow_invocable<F, value_type, Args...>::value)
     {
         auto tmp_ = load();
         func(tmp_, std::forward<Args>(args)...);
@@ -52,7 +52,7 @@ struct storage
 
     template<class F, class ... Args>
     inline void modify(as_result, F&& func, Args&&... args)
-        // TODO: add noexcept clause
+        noexcept(std::is_nothrow_invocable<F, value_type, Args...>::value)
     {
         store(func(load(), std::forward<Args>(args)...));
     }

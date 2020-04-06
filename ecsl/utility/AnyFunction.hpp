@@ -1403,7 +1403,7 @@ auto make_function(R(*f)(Args...), const Allocator& al = Allocator())
     -> std::pair<any_function, any_function::future<R>>
 {
     auto af_ = any_function(Tag{}, f, al);
-    return {af_, af_};
+    return {af_, af_.get_future()};
 }
 
 template<class Tag, class Signature, class Allocator, class Callable,
@@ -1420,7 +1420,7 @@ auto make_function(Callable&& c, const Allocator& al = Allocator()) ->
         typename detail::any_function::translate_signature<typename sig_trait::type, Callable>::type;
     typename mem_sig_trait::type f_ = &Callable::operator();
     auto af_ = any_function(Tag{}, std::forward<Callable>(c), f_, al);
-    return {af_, af_};
+    return {af_, af_.get_future()};
 }
 
 } // namespace ecsl

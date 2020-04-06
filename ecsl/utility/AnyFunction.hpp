@@ -1356,7 +1356,7 @@ class any_function :
     template<class ... Args>
     call_result operator()(Args&& ... args) const
     {
-        using opt_args = optional_tuple<typename std::decay<Args>::type...>;
+        using opt_args = optional_tuple<function_argument<Args>...>;
         call_guard guard_{m_context, m_manager};
         auto* arg_storage_ =
             call_with(action_type::get_argument_storage, type_id<opt_args>());

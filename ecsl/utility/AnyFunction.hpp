@@ -531,8 +531,22 @@ class any_function :
             return reinterpret_cast<std::optional<T>*>(call_with(action_type::get_result))->value();
         }
 
+        /**
+         * Indefinitely waits for call complition.
+         * Due to https://cplusplus.github.io/LWG/issue1518 if the call is prepared
+         * can excute the call.
+         * @warning UB if valid() == false
+         */
         void wait() const // noexcept
         {
+            {
+                call_guard guard_{m_context, m_manager};
+                if (call_with(action_type::is_ready_for_call))
+                {
+                    call_with(action_type::call);
+                    return;
+                }
+            }
             waitable& w_ =
                 *reinterpret_cast<waitable*>(call_with(action_type::get_waitable));
             std::unique_lock<std::mutex> lk_(w_.m_mu);
@@ -541,7 +555,6 @@ class any_function :
                 [&]{ return static_cast<bool>(call_with(action_type::has_anything)); }
             );
         }
-
         /**
          * Waits for associated function to be executed for specified amount of time.
          * Due to https://cplusplus.github.io/LWG/issue1518 will not attempt to excute function by itself.

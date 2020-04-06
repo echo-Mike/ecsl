@@ -274,6 +274,13 @@ class af_ctx_manager
         get_exception,          /* noexcept: obtain pointer to exception storage */
         get_waitable,           /* noexcept: obtain pointer to waitable object */
         get_argument_count,     /* noexcept: obtain count of arguments */
+        has_all_arguments,      /* noexcept: informs if context has all arguments */
+        /**
+         * noexcept:
+         * informs if context is ready to be called a.e.
+         * has_all_arguments returns true, and has_anything returns false
+         */
+        is_ready_for_call,
     };
     using manager_function = void*(
         action_type /*action*/,
@@ -482,7 +489,7 @@ class any_function :
     {
         ready,
         timeout,
-        deferred
+        deferred /* unused */
     };
 
     template<class T> friend class future;
@@ -517,33 +524,34 @@ class any_function :
             call_guard guard_{m_context, m_manager};
             if (call_with(action_type::has_exception))
             {
-                auto& eptr_ = *std::launder(
-                    reinterpret_cast<std::optional<std::exception_ptr>*>(
-                        call_with(action_type::get_exception)
-                    )
-                );
+                auto& eptr_ = *reinterpret_cast<std::optional<std::exception_ptr>*>(
+                    call_with(action_type::get_exception));
                 std::rethrow_exception(*eptr_);
             }
-            return std::launder(
-                reinterpret_cast<std::optional<T>*>(call_with(action_type::get_result))
-            )->value();
+            return reinterpret_cast<std::optional<T>*>(call_with(action_type::get_result))->value();
         }
 
         void wait() const // noexcept
         {
             waitable& w_ =
-                *std::launder(reinterpret_cast<waitable*>(call_with(action_type::get_waitable)));
+                *reinterpret_cast<waitable*>(call_with(action_type::get_waitable));
             std::unique_lock<std::mutex> lk_(w_.m_mu);
             w_.m_cv.wait(
                 lk_,
                 [&]{ return static_cast<bool>(call_with(action_type::has_anything)); }
             );
         }
+
+        /**
+         * Waits for associated function to be executed for specified amount of time.
+         * Due to https://cplusplus.github.io/LWG/issue1518 will not attempt to excute function by itself.
+         * @warning UB if valid() == false
+         */
         template<class Rep, class Period>
         future_status wait_for(const std::chrono::duration<Rep,Period>& timeout_duration) const // noexcept
         {
             waitable& w_ =
-                *std::launder(reinterpret_cast<waitable*>(call_with(action_type::get_waitable)));
+                *reinterpret_cast<waitable*>(call_with(action_type::get_waitable));
             std::unique_lock<std::mutex> lk_(w_.m_mu);
             return w_.m_cv.wait_for(
                 lk_,
@@ -551,11 +559,16 @@ class any_function :
                 [&]{ return static_cast<bool>(call_with(action_type::has_anything)); }
             ) ? future_status::ready : future_status::timeout;
         }
+        /**
+         * Waits until associated function is executed or specified time passes.
+         * Due to https://cplusplus.github.io/LWG/issue1518 will not attempt to excute function by itself.
+         * @warning UB if valid() == false
+         */
         template<class Clock, class Duration>
         future_status wait_until(const std::chrono::time_point<Clock,Duration>& timeout_time) const // noexcept
         {
             waitable& w_ =
-                *std::launder(reinterpret_cast<waitable*>(call_with(action_type::get_waitable)));
+                *reinterpret_cast<waitable*>(call_with(action_type::get_waitable));
             std::unique_lock<std::mutex> lk_(w_.m_mu);
             return w_.m_cv.wait_until(
                 lk_,
@@ -564,6 +577,9 @@ class any_function :
             ) ? future_status::ready : future_status::timeout;
         }
 
+        /**
+         * Returns true if future is not empty.
+         */
         bool valid() const noexcept { return static_cast<bool>(*this); }
 
         explicit operator bool() const noexcept
@@ -609,25 +625,25 @@ class any_function :
         template<class = typename std::enable_if<
             std::is_default_constructible<allocator_type>::value
         >::type>
-        explicit ref_counted(std::size_t n = 1)
+        explicit ref_counted()
             noexcept(std::is_nothrow_default_constructible<allocator_type>::value) :
-            m_counter{n}
+            m_counter{1}
         {}
         template<class = typename std::enable_if<
             std::is_copy_constructible<allocator_type>::value
         >::type>
-        explicit ref_counted(const allocator_type& a, std::size_t n = 1)
+        explicit ref_counted(const allocator_type& a)
             noexcept(std::is_nothrow_copy_constructible<allocator_type>::value) :
             allocator_type(a),
-            m_counter{n}
+            m_counter{1}
         {}
         template<class = typename std::enable_if<
             std::is_move_constructible<allocator_type>::value
         >::type>
-        explicit ref_counted(allocator_type&& a, std::size_t n = 1)
+        explicit ref_counted(allocator_type&& a)
             noexcept(std::is_nothrow_move_constructible<allocator_type>::value) :
             allocator_type(std::move(a)),
-            m_counter{n}
+            m_counter{1}
         {}
 
         inline pointer acquire() noexcept
@@ -1073,6 +1089,20 @@ class any_function :
             {
                 *reinterpret_cast<std::size_t*>(arg) = sizeof...(Args);
             } break;
+            case action_type::has_all_arguments:
+            {
+                if (!has_values(context.m_arguments))
+                {
+                    return nullptr;
+                }
+            } break;
+            case action_type::is_ready_for_call:
+            {
+                if (has_anything_() || !has_values(context.m_arguments))
+                {
+                    return nullptr;
+                }
+            } break;
         }
         return ctx;
     }
@@ -1227,9 +1257,7 @@ class any_function :
             throw bad_type_cast{};
         }
         call_guard guard_{af.m_context, af.m_manager};
-        return *std::launder(
-            reinterpret_cast<std::optional<T>*>(af.call_with(action_type::get_result))
-        );
+        return *reinterpret_cast<std::optional<T>*>(af.call_with(action_type::get_result));
     }
     template<class T>
     friend std::optional<T>* result_cast(const any_function* af) noexcept
@@ -1239,9 +1267,7 @@ class any_function :
             return nullptr;
         }
         call_guard guard_{af->m_context, af->m_manager};
-        return std::launder(
-            reinterpret_cast<std::optional<T>*>(af->call_with(action_type::get_result))
-        );
+        return reinterpret_cast<std::optional<T>*>(af->call_with(action_type::get_result));
     }
 
     /* Exception */
@@ -1253,16 +1279,17 @@ class any_function :
     }
     void rethrow() const
     {
-        auto& eptr_ = *std::launder(
-            reinterpret_cast<std::optional<std::exception_ptr>*>(
-                call_with(action_type::get_exception)
-            )
-        );
+        auto& eptr_ = *reinterpret_cast<std::optional<std::exception_ptr>*>(
+                call_with(action_type::get_exception));
         std::rethrow_exception(*eptr_);
     }
 
     /* Arguments */
 
+    bool has_arguments() const noexcept
+    {
+        return call_with(action_type::has_all_arguments);
+    }
     bool has_argument(std::size_t n) const noexcept
     {
         return call_with(action_type::has_argument, null_id, &n);
@@ -1286,11 +1313,7 @@ class any_function :
             throw bad_type_cast{};
         }
         call_guard guard_{af.m_context, af.m_manager};
-        return *std::launder(
-            reinterpret_cast<std::optional<T>*>(
-                af.call_with(action_type::get_argument, null_id, &n)
-            )
-        );
+        return *reinterpret_cast<std::optional<T>*>(af.call_with(action_type::get_argument, null_id, &n));
     }
     template<class T>
     friend std::optional<T>* argument_cast(const any_function* af, std::size_t n) noexcept
@@ -1300,15 +1323,20 @@ class any_function :
             return nullptr;
         }
         call_guard guard_{af->m_context, af->m_manager};
-        return std::launder(
-            reinterpret_cast<std::optional<T>*>(
-                af->call_with(action_type::get_argument, null_id, &n)
-            )
-        );
+        return reinterpret_cast<std::optional<T>*>(af->call_with(action_type::get_argument, null_id, &n));
     }
 
     /* Call operation */
 
+    /**
+     * Returns true if context can be called.
+     * All arguments are ready and no result or exception is stored
+     */
+    bool is_prepared() const noexcept
+    {
+        call_guard guard_{m_context, m_manager};
+        return call_with(action_type::is_ready_for_call);
+    }
     /**
      * Call with provided parameters
      */
@@ -1323,7 +1351,7 @@ class any_function :
         {
             return call_result::arguments_not_accepted;
         }
-        auto& args_ = *std::launder(reinterpret_cast<opt_args*>(arg_storage_));
+        auto& args_ = *reinterpret_cast<opt_args*>(arg_storage_);
         args_ = std::make_tuple(std::forward<Args>(args)...);
         return call_with(action_type::call) ?
             call_result::succeeded : call_result::exception;

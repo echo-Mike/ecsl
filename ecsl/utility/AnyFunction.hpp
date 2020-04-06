@@ -281,6 +281,7 @@ class af_ctx_manager
          * has_all_arguments returns true, and has_anything returns false
          */
         is_ready_for_call,
+        reset_result,           /* throw(~Result()): destroys result object */
     };
     using manager_function = void*(
         action_type /*action*/,
@@ -1116,6 +1117,10 @@ class any_function :
                     return nullptr;
                 }
             } break;
+            case action_type::reset_result:
+            {
+                context.m_result.reset();
+            } break;
         }
         return ctx;
     }
@@ -1281,6 +1286,11 @@ class any_function :
         }
         call_guard guard_{af->m_context, af->m_manager};
         return reinterpret_cast<std::optional<T>*>(af->call_with(action_type::get_result));
+    }
+    void reset_result() const
+    {
+        call_guard guard_{m_context, m_manager};
+        call_with(action_type::reset_result);
     }
 
     /* Exception */

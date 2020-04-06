@@ -263,7 +263,6 @@ class af_ctx_manager
         unlock_call,            /* noexcept: context unlock operation */
         get_argument_storage,   /* noexcept: obtain pointer to full argument storage */
         call,                   /* noexcept: call held Callable, context must be locked */
-        has_anything,           /* noexcept: check that context has result or exception */
         has_result,             /* noexcept: check that context has a result ready */
         has_exception,          /* noexcept: check that context has an exception */
         has_argument,           /* noexcept: check that context has some argument initialized */
@@ -275,12 +274,6 @@ class af_ctx_manager
         get_waitable,           /* noexcept: obtain pointer to waitable object */
         get_argument_count,     /* noexcept: obtain count of arguments */
         has_all_arguments,      /* noexcept: informs if context has all arguments */
-        /**
-         * noexcept:
-         * informs if context is ready to be called a.e.
-         * has_all_arguments returns true, and has_anything returns false
-         */
-        is_ready_for_call,
         reset_result,           /* throw(~Result()): destroys result object */
     };
     using manager_function = void*(
@@ -542,7 +535,8 @@ class any_function :
         {
             {
                 call_guard guard_{m_context, m_manager};
-                if (call_with(action_type::is_ready_for_call))
+                if (call_with(action_type::has_all_arguments) &&
+                    !(call_with(action_type::has_result) || call_with(action_type::has_exception)))
                 {
                     call_with(action_type::call);
                     return;
@@ -973,8 +967,6 @@ class any_function :
     {
         using wait_source = waitable_source<Context>;
         auto& context = *reinterpret_cast<Context*>(ctx);
-        auto has_anything_ =
-            [&]{ return context.m_result.has_value() || context.m_exception.has_value(); };
         switch (action)
         {
             case action_type::up_ref_counter:
@@ -1025,7 +1017,7 @@ class any_function :
                         wait_source::notify(c);
                     }
                 } notifier_{context};
-                if (has_anything_())
+                if (context.m_result.has_value() || context.m_exception.has_value())
                 {   //? No call reentry
                     return ctx;
                 }
@@ -1035,13 +1027,6 @@ class any_function :
                 catch (...)
                 {
                     context.store_exception();
-                    return nullptr;
-                }
-            } break;
-            case action_type::has_anything:
-            {
-                if (!has_anything_())
-                {
                     return nullptr;
                 }
             } break;
@@ -1106,13 +1091,6 @@ class any_function :
             case action_type::has_all_arguments:
             {
                 if (!has_values(context.m_arguments))
-                {
-                    return nullptr;
-                }
-            } break;
-            case action_type::is_ready_for_call:
-            {
-                if (has_anything_() || !has_values(context.m_arguments))
                 {
                     return nullptr;
                 }
@@ -1252,7 +1230,8 @@ class any_function :
     bool has_anything() const noexcept
     {
         call_guard guard_{m_context, m_manager};
-        return call_with(action_type::has_anything);
+        return  call_with(action_type::has_result) ||
+                call_with(action_type::has_exception);
     }
 
     /* Result */
@@ -1358,7 +1337,8 @@ class any_function :
     bool is_prepared() const noexcept
     {
         call_guard guard_{m_context, m_manager};
-        return call_with(action_type::is_ready_for_call);
+        return call_with(action_type::has_all_arguments) &&
+            !(call_with(action_type::has_result) || call_with(action_type::has_exception));
     }
     /**
      * Call with provided parameters

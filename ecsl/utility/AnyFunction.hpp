@@ -227,7 +227,7 @@ template<class... Types>
 constexpr bool is_same(
     std::size_t i,
     type_id_t id,
-    const std::tuple<std::optional<Types>...>& t
+    const std::tuple<std::optional<Types>...>&
 ) noexcept
 {
     return detail::is_same_impl<Types...>(i, id, std::make_index_sequence<sizeof...(Types)>{});
@@ -525,7 +525,7 @@ class any_function :
                 std::rethrow_exception(*eptr_);
             }
             return std::launder(
-                reinterpret_cast<std::optional<T>*>(af.call_with(action_type::get_result))
+                reinterpret_cast<std::optional<T>*>(call_with(action_type::get_result))
             )->value();
         }
 
@@ -606,14 +606,14 @@ class any_function :
         using allocator_type    = typename alloc_trait::allocator_type;
         using pointer           = typename std::add_pointer<value_type>::type;
 
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_default_constructible<allocator_type>::value
         >::type>
         explicit ref_counted(std::size_t n = 1)
             noexcept(std::is_nothrow_default_constructible<allocator_type>::value) :
             m_counter{n}
         {}
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_copy_constructible<allocator_type>::value
         >::type>
         explicit ref_counted(const allocator_type& a, std::size_t n = 1)
@@ -621,7 +621,7 @@ class any_function :
             allocator_type(a),
             m_counter{n}
         {}
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_move_constructible<allocator_type>::value
         >::type>
         explicit ref_counted(allocator_type&& a, std::size_t n = 1)
@@ -658,24 +658,24 @@ class any_function :
         template<class Exception>
         void store_exception() noexcept
         {
-            try { throw Exception{} }
+            try { throw Exception{}; }
             catch (...)
             {
-                if (context.m_exception.has_value())
+                if (m_exception.has_value())
                 {   //? Here is the second uncought exception -> call terminate
                     throw;
                 }
-                context.m_exception = std::current_exception();
+                m_exception = std::current_exception();
             }
         }
 
         void store_exception() noexcept
         {
-            if (context.m_exception.has_value())
+            if (m_exception.has_value())
             {   //? Here is the second uncought exception -> call terminate
                 throw;
             }
-            context.m_exception = std::current_exception();
+            m_exception = std::current_exception();
         }
     };
 
@@ -683,14 +683,18 @@ class any_function :
 
     template<template<class> class Allocator, class Callable, class Result, class ... Args>
     struct unsafe_ctx :
-        public ref_counted<std::size_t, unsafe_ctx, Allocator<unsafe_ctx<Allocator, Callable, Result, Args...>>>,
+        public ref_counted<
+            std::size_t,
+            unsafe_ctx<Allocator, Callable, Result, Args...>,
+            Allocator<unsafe_ctx<Allocator, Callable, Result, Args...>>
+            >,
         public ctx_storage<Callable, Result, Args...>
     {
-        using ref_base = ref_counted<std::size_t, unsafe_ctx, Allocator<unsafe_ctx<Allocator, Callable, Result, Args...>>>;
+        using ref_base = ref_counted<std::size_t, unsafe_ctx, Allocator<unsafe_ctx>>;
         using ctx_base = ctx_storage<Callable, Result, Args...>;
         using allocator_type = typename ref_base::allocator_type;
 
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_default_constructible<allocator_type>::value
         >::type>
         explicit unsafe_ctx()
@@ -698,7 +702,7 @@ class any_function :
             ref_base{},
             ctx_base{}
         {}
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_copy_constructible<allocator_type>::value
         >::type>
         explicit unsafe_ctx(const allocator_type& a)
@@ -706,7 +710,7 @@ class any_function :
             ref_base{a},
             ctx_base{}
         {}
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_move_constructible<allocator_type>::value
         >::type>
         explicit unsafe_ctx(allocator_type&& a)
@@ -721,14 +725,18 @@ class any_function :
     };
     template<template<class> class Allocator, class Callable, class Result, class ... Args>
     struct shared_ctx :
-        public ref_counted<std::atomic_size_t, shared_ctx, Allocator<shared_ctx<Allocator, Callable, Result, Args...>>>,
+        public ref_counted<
+            std::atomic_size_t,
+            shared_ctx<Allocator, Callable, Result, Args...>,
+            Allocator<shared_ctx<Allocator, Callable, Result, Args...>>
+        >,
         public ctx_storage<Callable, Result, Args...>
     {
-        using ref_base = ref_counted<std::atomic_size_t, shared_ctx, Allocator<shared_ctx<Allocator, Callable, Result, Args...>>>;
+        using ref_base = ref_counted<std::atomic_size_t, shared_ctx, Allocator<shared_ctx>>;
         using ctx_base = ctx_storage<Callable, Result, Args...>;
         using allocator_type = typename ref_base::allocator_type;
 
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_default_constructible<allocator_type>::value
         >::type>
         explicit shared_ctx()
@@ -736,7 +744,7 @@ class any_function :
             ref_base{},
             ctx_base{}
         {}
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_copy_constructible<allocator_type>::value
         >::type>
         explicit shared_ctx(const allocator_type& a)
@@ -744,7 +752,7 @@ class any_function :
             ref_base{a},
             ctx_base{}
         {}
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_move_constructible<allocator_type>::value
         >::type>
         explicit shared_ctx(allocator_type&& a)
@@ -759,16 +767,20 @@ class any_function :
     };
     template<template<class> class Allocator, class Callable, class Result, class ... Args>
     struct spinlock_ctx :
-        public ref_counted<std::atomic_size_t, spinlock_ctx, Allocator<spinlock_ctx<Allocator, Callable, Result, Args...>>>,
+        public ref_counted<
+            std::atomic_size_t,
+            spinlock_ctx<Allocator, Callable, Result, Args...>,
+            Allocator<spinlock_ctx<Allocator, Callable, Result, Args...>>
+        >,
         public ctx_storage<Callable, Result, Args...>
     {
         std::atomic_flag m_spinlock;
 
-        using ref_base = ref_counted<std::atomic_size_t, spinlock_ctx, Allocator<spinlock_ctx<Allocator, Callable, Result, Args...>>>;
+        using ref_base = ref_counted<std::atomic_size_t, spinlock_ctx, Allocator<spinlock_ctx>>;
         using ctx_base = ctx_storage<Callable, Result, Args...>;
         using allocator_type = typename ref_base::allocator_type;
 
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_default_constructible<allocator_type>::value
         >::type>
         explicit spinlock_ctx()
@@ -777,7 +789,7 @@ class any_function :
             ctx_base{},
             m_spinlock{}
         {}
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_copy_constructible<allocator_type>::value
         >::type>
         explicit spinlock_ctx(const allocator_type& a)
@@ -786,7 +798,7 @@ class any_function :
             ctx_base{},
             m_spinlock{}
         {}
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_move_constructible<allocator_type>::value
         >::type>
         explicit spinlock_ctx(allocator_type&& a)
@@ -812,16 +824,19 @@ class any_function :
     };
     template<template<class> class Allocator, class Callable, class Result, class ... Args>
     struct waitable_ctx :
-        public ref_counted<std::atomic_size_t, waitable_ctx, Allocator<waitable_ctx<Allocator, Callable, Result, Args...>>>,
+        public ref_counted<
+            std::atomic_size_t,
+            waitable_ctx<Allocator, Callable, Result, Args...>,
+            Allocator<waitable_ctx<Allocator, Callable, Result, Args...>>>,
         public ctx_storage<Callable, Result, Args...>
     {
         waitable m_waitable;
 
-        using ref_base = ref_counted<std::atomic_size_t, waitable_ctx, Allocator<waitable_ctx<Allocator, Callable, Result, Args...>>>;
+        using ref_base = ref_counted<std::atomic_size_t, waitable_ctx, Allocator<waitable_ctx>>;
         using ctx_base = ctx_storage<Callable, Result, Args...>;
         using allocator_type = typename ref_base::allocator_type;
 
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_default_constructible<allocator_type>::value
         >::type>
         explicit waitable_ctx()
@@ -830,7 +845,7 @@ class any_function :
             ctx_base{},
             m_waitable{}
         {}
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_copy_constructible<allocator_type>::value
         >::type>
         explicit waitable_ctx(const allocator_type& a)
@@ -839,7 +854,7 @@ class any_function :
             ctx_base{},
             m_waitable{}
         {}
-        template<class = std::enable_if<
+        template<class = typename std::enable_if<
             std::is_move_constructible<allocator_type>::value
         >::type>
         explicit waitable_ctx(allocator_type&& a)
@@ -851,15 +866,15 @@ class any_function :
 
         void lock() noexcept
         {
-            m_mu.lock();
+            m_waitable.m_mu.lock();
         }
         bool try_lock() noexcept
         {
-            return m_mu.try_lock();
+            return m_waitable.m_mu.try_lock();
         }
         void unlock()
         {
-            m_mu.unlock();
+            m_waitable.m_mu.unlock();
         }
     };
 
@@ -869,20 +884,20 @@ class any_function :
     template<class Context>
     struct waitable_source
     {
-        static waitable& get_waitable(Context&) const noexcept
+        static waitable& get_waitable(Context&) noexcept
         {
             static waitable g_waitable{};
             return g_waitable;
         }
-        static void lock_waitable(Context& ctx) const noexcept
+        static void lock_waitable(Context& ctx) noexcept
         {
             get_waitable(ctx).m_mu.lock();
         }
-        static void unlock_waitable(Context& ctx) const noexcept
+        static void unlock_waitable(Context& ctx) noexcept
         {
             get_waitable(ctx).m_mu.unlock();
         }
-        static void notify(Context& ctx) const noexcept
+        static void notify(Context& ctx) noexcept
         {
             get_waitable(ctx).m_cv.notify_all();
         }
@@ -891,26 +906,26 @@ class any_function :
     struct waitable_source<unsafe_ctx<Allocator, Callable, Result, Args...>>
     {
         using Context = unsafe_ctx<Allocator, Callable, Result, Args...>;
-        static waitable& get_waitable(Context&) const noexcept
+        static waitable& get_waitable(Context&) noexcept
         {
             static waitable g_waitable{};
             return g_waitable;
         }
-        static void lock_waitable(Context&) const noexcept {}
-        static void unlock_waitable(Context&) const noexcept {}
-        static void notify(Context&) const noexcept {}
+        static void lock_waitable(Context&) noexcept {}
+        static void unlock_waitable(Context&) noexcept {}
+        static void notify(Context&) noexcept {}
     };
     template<template<class> class Allocator, class Callable, class Result, class ... Args>
     struct waitable_source<waitable_ctx<Allocator, Callable, Result, Args...>>
     {
         using Context = waitable_ctx<Allocator, Callable, Result, Args...>;
-        static waitable& get_waitable(Context& ctx) const noexcept
+        static waitable& get_waitable(Context& ctx) noexcept
         {
             return ctx.m_waitable;
         }
-        static void lock_waitable(Context&) const noexcept {}
-        static void unlock_waitable(Context&) const noexcept {}
-        static void notify(Context& ctx) const noexcept
+        static void lock_waitable(Context&) noexcept {}
+        static void unlock_waitable(Context&) noexcept {}
+        static void notify(Context& ctx) noexcept
         {
             ctx.m_waitable.m_cv.notify_all();
         }
@@ -964,7 +979,7 @@ class any_function :
             {
                 if (!has_values(context.m_arguments))
                 {
-                    context.store_exception<missing_argument>();
+                    context.template store_exception<missing_argument>();
                     return nullptr;
                 }
                 struct notifier
@@ -1129,6 +1144,8 @@ class any_function :
             typename signature::result_type,
             Args...
         >::type;
+        using al_t = typename std::allocator_traits<
+            typename context_type::allocator_type>::allocator_type;
         context_type* storage_ = alloc_context<context_type>(al);
         storage_->m_callable = f;
         m_context = storage_;
@@ -1152,6 +1169,8 @@ class any_function :
             typename signature::result_type,
             Args...
         >::type;
+        using al_t = typename std::allocator_traits<
+            typename context_type::allocator_type>::allocator_type;
         context_type* storage_ = alloc_context<context_type>(al);
         storage_->m_callable = std::forward<C>(callable);
         m_context = storage_;
@@ -1357,7 +1376,7 @@ auto make_function(Callable&& c, const Allocator& al = Allocator()) ->
     >
 {
     using mem_sig_trait =
-        typename detail::any_function::translate_signature<sig_trait::type, Callable>::type;
+        typename detail::any_function::translate_signature<typename sig_trait::type, Callable>::type;
     typename mem_sig_trait::type f_ = &Callable::operator();
     auto af_ = any_function(Tag{}, std::forward<Callable>(c), f_, al);
     return {af_, af_};

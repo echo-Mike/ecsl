@@ -547,7 +547,7 @@ class any_function :
             std::unique_lock<std::mutex> lk_(w_.m_mu);
             w_.m_cv.wait(
                 lk_,
-                [&]{ return static_cast<bool>(call_with(action_type::has_anything)); }
+                [&]{ return call_with(action_type::has_result) || call_with(action_type::has_exception); }
             );
         }
         /**
@@ -564,7 +564,7 @@ class any_function :
             return w_.m_cv.wait_for(
                 lk_,
                 timeout_duration,
-                [&]{ return static_cast<bool>(call_with(action_type::has_anything)); }
+                [&]{ return call_with(action_type::has_result) || call_with(action_type::has_exception); }
             ) ? future_status::ready : future_status::timeout;
         }
         /**
@@ -581,7 +581,7 @@ class any_function :
             return w_.m_cv.wait_until(
                 lk_,
                 timeout_time,
-                [&]{ return static_cast<bool>(call_with(action_type::has_anything)); }
+                [&]{ return call_with(action_type::has_result) || call_with(action_type::has_exception); }
             ) ? future_status::ready : future_status::timeout;
         }
 
@@ -1315,7 +1315,8 @@ class any_function :
             throw bad_type_cast{};
         }
         call_guard guard_{af.m_context, af.m_manager};
-        return *reinterpret_cast<std::optional<T>*>(af.call_with(action_type::get_argument, null_id, &n));
+        return *reinterpret_cast<std::optional<T>*>(
+            af.call_with(action_type::get_argument, null_id, &n));
     }
     template<class T>
     friend std::optional<T>* argument_cast(const any_function* af, std::size_t n) noexcept
@@ -1325,7 +1326,8 @@ class any_function :
             return nullptr;
         }
         call_guard guard_{af->m_context, af->m_manager};
-        return reinterpret_cast<std::optional<T>*>(af->call_with(action_type::get_argument, null_id, &n));
+        return reinterpret_cast<std::optional<T>*>(
+            af->call_with(action_type::get_argument, null_id, &n));
     }
 
     /* Call operation */

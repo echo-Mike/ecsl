@@ -1218,7 +1218,7 @@ class any_function :
     explicit any_function(const future<T>& fut) noexcept : af_ctx_manager{fut} {}
 
     template<class T>
-    future<T> get_future() const { return *this; }
+    future<T> get_future() const { return future<T>{*this}; }
 
     inline void swap(any_function& other) noexcept
     {

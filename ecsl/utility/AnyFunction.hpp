@@ -353,7 +353,7 @@ class af_ctx_manager
         return *this;
     }
 
-    ~af_ctx_manager()
+    ~af_ctx_manager() // implicit noexcept
     {
         if (operator bool())
         {
@@ -660,12 +660,17 @@ class any_function :
             return static_cast<pointer>(this);
         }
 
-        inline void release()
+        inline void release() noexcept(
+                std::is_nothrow_destructible<Derived>::value &&
+                std::is_nothrow_copy_constructible<Allocator>::value
+            )
         {
             if (!(--m_counter))
             {
                 auto al_ = get_alloc();
                 auto ptr_ = static_cast<pointer>(this);
+                //? There is a bug in std::allocator and std::allocator_traits see:
+                //? https://stackoverflow.com/questions/52978545/why-is-stdallocatordeallocate-not-noexcept
                 alloc_trait::destroy(al_, ptr_);
                 alloc_trait::deallocate(al_, ptr_, 1);
             }

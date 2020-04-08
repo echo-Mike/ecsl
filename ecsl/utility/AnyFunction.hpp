@@ -311,12 +311,12 @@ class af_ctx_manager
         return m_manager(action, m_context, id, arg);
     }
 
+    constexpr af_ctx_manager(void* context, manager_function* manager) noexcept :
+        m_context{context}, m_manager{manager} {}
+
     static af_ctx_manager af_ctx_manager_fabric(void* context, manager_function* manager) noexcept
     {
-        af_ctx_manager tmp_{};
-        tmp_.m_context = context;
-        tmp_.m_manager = manager;
-        return tmp_;
+        return {context, manager};
     }
 
   public:

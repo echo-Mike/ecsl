@@ -1164,6 +1164,15 @@ class any_function :
         using type = decltype(context_trait_impl<Allocator, Callable, R, function_argument<Args>...>(Tag{}));
     };
 
+  protected:
+    constexpr any_function(void* context, manager_function* manager) noexcept :
+        af_ctx_manager{context, manager} {}
+
+    static any_function any_function_fabric(void* context, manager_function* manager) noexcept
+    {
+        return {context, manager};
+    }
+
   public:
     constexpr any_function() noexcept : af_ctx_manager{} {}
     any_function(const any_function&) noexcept = default;

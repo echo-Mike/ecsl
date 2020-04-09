@@ -314,11 +314,6 @@ class af_ctx_manager
     constexpr af_ctx_manager(void* context, manager_function* manager) noexcept :
         m_context{context}, m_manager{manager} {}
 
-    static af_ctx_manager af_ctx_manager_fabric(void* context, manager_function* manager) noexcept
-    {
-        return {context, manager};
-    }
-
   public:
     constexpr af_ctx_manager() noexcept : m_context{nullptr}, m_manager{nullptr} {}
 

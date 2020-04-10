@@ -42,10 +42,28 @@ struct type_id_
     static void id_() {}
 };
 
-template <class F, class Tuple, std::size_t... I>
-constexpr decltype(auto) apply_impl(F&& f, Tuple&& t, std::index_sequence<I...>)
+template<class T, class U>
+constexpr typename std::enable_if<std::is_rvalue_reference<T>::value,
+std::optional<U>&&>::type optional_forward(std::optional<U>& opt) noexcept
 {
-    return std::invoke(std::forward<F>(f), *std::get<I>(std::forward<Tuple>(t))...);
+    return std::move(opt);
+}
+template<class T, class U>
+constexpr typename std::enable_if<!std::is_rvalue_reference<T>::value,
+std::optional<U>&>::type optional_forward(std::optional<U>& opt) noexcept
+{
+    return opt;
+}
+
+template <class F, class Tuple, class... Args, std::size_t... I>
+constexpr decltype(auto) apply_impl(
+    F& f,
+    Tuple& t,
+    detail::type_list<Args...> a,
+    std::index_sequence<I...>
+)
+{
+    return std::invoke(f, *optional_forward<Args>(std::get<I>(t))...);
 }
 
 template <class... Types, std::size_t... I>
@@ -60,6 +78,8 @@ constexpr bool has_values_impl(
     static_cast<void>(_);
     return result_;
 }
+
+template<class... T> struct type_list{};
 
 } // namespace detail
 
@@ -76,7 +96,11 @@ constexpr static type_id_t null_id = nullptr;
  */
 template<class... T> type_id_t type_id() noexcept { return &detail::type_id_<T...>::id_; }
 
-template<class T> struct signature_trait;
+/**
+ * Trait for signature breakdown
+ */
+template<class T>
+struct signature_trait;
 template<class R, class... Args>
 struct signature_trait<R(Args...)>
 {
@@ -89,12 +113,20 @@ struct signature_trait<R(C::*)(Args...)>
     using type = R(C::*)(Args...);
     using result_type = R;
 };
+/**
+ * signature_trait helpers
+ */
 template<class R, class... Args>
 auto get_signature(R(*)(Args...)) -> signature_trait<R(Args...)>;
 template<class C, class R, class... Args>
 auto get_signature_(R(C::*)(Args...)) -> signature_trait<R(C::*)(Args...)>;
 
-template<class T, class C> struct translate_signature;
+/**
+ * Trait for signature translation from free-function
+ * to member-function and vice-versa
+ */
+template<class T, class C>
+struct translate_signature;
 template<class C, class R, class... Args>
 struct translate_signature<R(Args...), C>
 {
@@ -106,10 +138,13 @@ struct translate_signature<R(C::*)(Args...), C>
     using type = signature_trait<R(Args...)>;
 };
 
+/**
+ * Trait to determine that object is a functor (has operator() of some signature defined)
+ */
 template<class T>
 struct is_callable
 {
-    private:
+  private:
     struct yes { char _; };
     struct no { char _[2]; };
 
@@ -122,18 +157,17 @@ struct is_callable
     template<typename C>
     static no test(check<void (fallback::*)(), &C::operator()>*);
 
-    public:
+  public:
     static const bool value = sizeof(test<derived>(0)) == sizeof(yes);
 };
 
 /**
  * Calls callable with arguments from std::tuple<std::optional<T...>>
  */
-template <class F, class Tuple>
-constexpr decltype(auto) apply(F&& f, Tuple&& t)
+template <class F, class Tuple, class... Args>
+constexpr decltype(auto) apply(F& f, Tuple& t, detail::type_list<Args...> a)
 {
-    return detail::apply_impl(std::forward<F>(f), std::forward<Tuple>(t),
-        std::make_index_sequence<std::tuple_size_v<std::remove_reference_t<Tuple>>>{});
+    return detail::apply_impl(f, t, a, std::make_index_sequence<sizeof...(Args)>{});
 }
 /**
  * Checks that every std::optional from std::tuple<std::optional<T...>> has value
@@ -250,6 +284,9 @@ constexpr bool has_value(std::size_t i, const std::tuple<std::optional<Types>...
 class af_ctx_manager
 {
   protected:
+    /**
+     * Represents the set of operations possible to execute on context
+     */
     enum class action_type
     {
         up_ref_counter,         /* noexcept: operation of context reference counter increment */
@@ -274,8 +311,10 @@ class af_ctx_manager
         get_waitable,           /* noexcept: obtain pointer to waitable object */
         get_argument_count,     /* noexcept: obtain count of arguments */
         has_all_arguments,      /* noexcept: informs if context has all arguments */
-        reset_result,           /* throw(~Result()): destroys result object */
     };
+    /**
+     * Represents the signature of core manager function
+     */
     using manager_function = void*(
         action_type /*action*/,
         void* /*context*/,
@@ -283,6 +322,9 @@ class af_ctx_manager
         void* /*arg*/
     );
 
+    /**
+     * RAII type for context locking
+     */
     struct call_guard
     {
         void* ctx;
@@ -306,11 +348,69 @@ class af_ctx_manager
         }
     };
 
+    /**
+     * Represents rebindable lvalue reference.
+     * @tparam T Must be a lvalue reference type, may be cv-qualified
+     */
+    template<class T>
+    struct reference_storage
+    {
+        static_assert(std::is_lvalue_reference<T>::value, "Only for lvalue reference types");
+        using nr_type = typename std::remove_reference<T>::type;
+
+        reference_storage(nr_type& value) noexcept : ptr{&value} {}
+        reference_storage& operator=(nr_type& value) noexcept
+        {
+            ptr = &value;
+            return *this;
+        }
+
+        operator nr_type&() const noexcept { return *ptr; }
+
+        typename std::add_pointer<nr_type>::type ptr;
+    };
+
+    /**
+     * Represents void result type
+     */
+    struct as_void {};
+
+    /**
+     * Trait for function argument set storage representation.
+     *  If T is lvalue reference -> the rebindable reference-like object is created
+     *  If T is rvalue reference -> object is stored as is after std::decay
+     *  If T is value -> object is stored as is after std::decay
+     */
+    template<class T>
+    using function_argument = typename std::conditional<
+        std::is_lvalue_reference<T>::value,
+        reference_storage<T>,
+        typename std::decay<T>::type
+    >::type;
+    /**
+     * Trait for function result storage representation.
+     *  If T is lvalue reference -> the rebindable reference-like object is created
+     *  If T is rvalue reference -> object is stored as is after std::decay
+     *  If T is value -> object is stored as is after std::decay
+     *  If T is cv-void -> void replacement type is created
+     */
+    template<class T>
+    using function_result = typename std::conditional<
+        std::is_void<T>::value,
+        as_void,
+        typename std::conditional<
+            std::is_lvalue_reference<T>::value,
+            reference_storage<T>,
+            typename std::decay<T>::type
+        >::type
+    >::type;
+
     void* call_with(action_type action, type_id_t id = null_id, void* arg = nullptr) const
     {
         return m_manager(action, m_context, id, arg);
     }
 
+    /* Used for test suit */
     constexpr af_ctx_manager(void* context, manager_function* manager) noexcept :
         m_context{context}, m_manager{manager} {}
 
@@ -396,8 +496,7 @@ class af_ctx_manager
  * Copyable and Movable. Default constructiable in empty state.
  *
  * Known limitations:
- *  1) Can't work with functions returning void (also called procedures)
- *  2) Works only with allocators with single template parameter
+ *  1) Works only with allocators with single template parameter
  */
 class any_function :
     public af_ctx_manager
@@ -493,12 +592,12 @@ class any_function :
 
     /**
      * Like std::future but for any_function facility
+     * @tparam T Expected type of the result
      */
     template<class T>
     class future :
         public af_ctx_manager
     {
-        friend any_function;
       public:
         constexpr future() noexcept : af_ctx_manager{} {}
         future(const future&) noexcept = default;
@@ -507,6 +606,10 @@ class any_function :
         future& operator=(future&&) noexcept = default;
         ~future() = default;
 
+        /**
+         * Constructs future from any_function object
+         * @throw any_function::bad_type_cast if result type is not T
+         */
         explicit future(const any_function& af) : af_ctx_manager{af}
         {
             if (static_cast<bool>(af) && !af.is_result_of_type<T>())
@@ -515,6 +618,11 @@ class any_function :
             }
         }
 
+        /**
+         * Obtains the result, possibly after waiting for some time.
+         * @warning UB if valid() == false
+         */
+        template<class = typename std::enable_if<!std::is_void<T>::value>::type>
         T& get() const
         {
             wait();
@@ -526,6 +634,24 @@ class any_function :
                 std::rethrow_exception(*eptr_);
             }
             return reinterpret_cast<std::optional<T>*>(call_with(action_type::get_result))->value();
+        }
+        /**
+         * Obtains the result, possibly after waiting for some time.
+         * Overload for void returning functions
+         * @warning UB if valid() == false
+         */
+        template<class = typename std::enable_if<std::is_void<T>::value>::type>
+        void get() const
+        {
+            wait();
+            call_guard guard_{m_context, m_manager};
+            if (call_with(action_type::has_exception))
+            {
+                auto& eptr_ = *reinterpret_cast<std::optional<std::exception_ptr>*>(
+                    call_with(action_type::get_exception));
+                std::rethrow_exception(*eptr_);
+            }
+            call_with(action_type::get_result);
         }
 
         /**
@@ -608,9 +734,6 @@ class any_function :
 
     template<class ... Types>
     using optional_tuple = std::tuple<std::optional<Types>...>;
-
-    template<class T>
-    using function_argument = typename std::decay<T>::type;
 
     template<class Counter, class Derived, class Allocator>
     class ref_counted : private Allocator
@@ -965,7 +1088,13 @@ class any_function :
 
     /* Core manager function */
 
-    template<class Context, class Allocator, class Callable, class Result, class ... Args>
+    /**
+     * @tparam Context One of internal contexts is expected
+     * @tparam Callable Pure type of callable object is expected
+     * @tparam Result Type of result from signature
+     * @tparam Args Types of arguments from signature (with qualification)
+     */
+    template<class Context, class Callable, class Result, class ... Args>
     static void* core_manager(
         action_type action,
         void* ctx,
@@ -1002,7 +1131,7 @@ class any_function :
             } break;
             case action_type::get_argument_storage:
             {
-                return type_id<optional_tuple<Args...>>() == id ?
+                return type_id<optional_tuple<function_argument<Args>...>>() == id ?
                     &context.m_arguments : nullptr;
             } break;
             case action_type::call:
@@ -1030,7 +1159,16 @@ class any_function :
                     return ctx;
                 }
                 try {
-                    context.m_result = apply(*context.m_callable, context.m_args);
+                    if constexpr (std::is_void<Result>::value)
+                    {
+                        apply(*context.m_callable, context.m_args, detail::type_list<Args...>{});
+                        context.m_result = as_void{};
+                    }
+                    else
+                    {
+                        context.m_result =
+                            apply(*context.m_callable, context.m_args, detail::type_list<Args...>{});
+                    }
                 }
                 catch (...)
                 {
@@ -1062,7 +1200,7 @@ class any_function :
             } break;
             case action_type::check_result_type:
             {
-                if (type_id<Result>() != id)
+                if (type_id<function_result<Result>>() != id)
                 {
                     return nullptr;
                 }
@@ -1102,10 +1240,6 @@ class any_function :
                 {
                     return nullptr;
                 }
-            } break;
-            case action_type::reset_result:
-            {
-                context.m_result.reset();
             } break;
         }
         return ctx;
@@ -1160,6 +1294,7 @@ class any_function :
     };
 
   protected:
+    /* Tests only section */
     constexpr any_function(void* context, manager_function* manager) noexcept :
         af_ctx_manager{context, manager} {}
 
@@ -1176,6 +1311,10 @@ class any_function :
     any_function& operator=(any_function&&) noexcept = default;
     ~any_function() = default;
 
+    /**
+     * Constructs any_function from function pointer using specified
+     * allocator template for the context allocator.
+     */
     template<class Tag, class T, template<class> class Allocator, class R, class... Args>
     any_function(Tag, R(*f)(Args...), const Allocator<T>& al) : any_function{}
     {
@@ -1187,20 +1326,20 @@ class any_function :
             typename signature::result_type,
             Args...
         >::type;
-        using al_t = typename std::allocator_traits<
-            typename context_type::allocator_type>::allocator_type;
         context_type* storage_ = alloc_context<context_type>(al);
         storage_->m_callable = f;
         m_context = storage_;
         m_manager = &core_manager<
             context_type,
-            al_t,
             decltype(f),
             typename signature::result_type,
-            function_argument<Args>...
+            Args...
         >;
     }
-
+    /**
+     * Constructs any_function from any callable and member function pointer
+     * using specified allocator template for the context allocator.
+     */
     template<class Tag, class C, class T, template<class> class Allocator, class R, class... Args>
     any_function(Tag, C&& callable, R(C::*f)(Args...), const Allocator<T>& al) : any_function{}
     {
@@ -1212,23 +1351,26 @@ class any_function :
             typename signature::result_type,
             Args...
         >::type;
-        using al_t = typename std::allocator_traits<
-            typename context_type::allocator_type>::allocator_type;
         context_type* storage_ = alloc_context<context_type>(al);
         storage_->m_callable = std::forward<C>(callable);
         m_context = storage_;
         m_manager = &core_manager<
             context_type,
-            al_t,
             typename std::remove_reference<C>::type,
             typename signature::result_type,
-            function_argument<Args>...
+            Args...
         >;
     }
-
+    /**
+     * Constructs any_function from any_function::future
+     */
     template<class T>
     explicit any_function(const future<T>& fut) noexcept : af_ctx_manager{fut} {}
 
+    /**
+     * Explicitly obtains any_function::future from any_function object
+     * @throw any_function::bad_type_cast If specified T is not a type of result
+     */
     template<class T>
     future<T> get_future() const { return future<T>{*this}; }
 
@@ -1244,6 +1386,10 @@ class any_function :
 
     /* Result or Exception */
 
+    /**
+     * Tests if any_function context have a result ready or exception stored
+     * @warning UB if any_function is empty
+     */
     bool has_anything() const noexcept
     {
         call_guard guard_{m_context, m_manager};
@@ -1253,49 +1399,79 @@ class any_function :
 
     /* Result */
 
+    /**
+     * Tests if any_function context have a result ready
+     * @warning UB if any_function is empty
+     */
     bool has_result() const noexcept
     {
         call_guard guard_{m_context, m_manager};
         return call_with(action_type::has_result);
     }
+    /**
+     * Tests if any_function context have a result of specified type T
+     * @warning UB if any_function is empty
+     */
     template<class T>
     bool is_result_of_type() const noexcept
     {
-        return call_with(action_type::check_result_type, type_id<T>());
+        return call_with(action_type::check_result_type, type_id<function_result<T>>());
     }
+    /**
+     * Casts result to specified type T
+     * @warning Not available for (possibly cv) void type
+     * @throw any_function::bad_type_cast If specified T is not a type of result
+     * @return reference to std::optional of some type, convertiable to T
+     * @warning UB if any_function is empty
+     */
     template<class T>
-    friend std::optional<T>& result_cast(const any_function& af)
+    friend typename std::enable_if<!std::is_void<T>::value,
+    std::optional<function_result<T>>&>::type result_cast(const any_function& af)
     {
         if (!af.is_result_of_type<T>())
         {
             throw bad_type_cast{};
         }
         call_guard guard_{af.m_context, af.m_manager};
-        return *reinterpret_cast<std::optional<T>*>(af.call_with(action_type::get_result));
+        return *reinterpret_cast<std::optional<function_result<T>>*>(
+            af.call_with(action_type::get_result));
     }
+    /**
+     * Casts result to specified type T
+     * @warning Not available for (possibly cv) void type
+     * @return nullptr if type cast failed, or
+     *      pointer to std::optional of some type, convertiable to T
+     * @warning UB if any_function is empty
+     */
     template<class T>
-    friend std::optional<T>* result_cast(const any_function* af) noexcept
+    friend typename std::enable_if<!std::is_void<T>::value,
+    std::optional<function_result<T>>*>::type result_cast(const any_function* af) noexcept
     {
         if (!af->is_result_of_type<T>())
         {
             return nullptr;
         }
         call_guard guard_{af->m_context, af->m_manager};
-        return reinterpret_cast<std::optional<T>*>(af->call_with(action_type::get_result));
-    }
-    void reset_result() const
-    {
-        call_guard guard_{m_context, m_manager};
-        call_with(action_type::reset_result);
+        return reinterpret_cast<std::optional<function_result<T>>*>(
+            af->call_with(action_type::get_result));
     }
 
     /* Exception */
 
+    /**
+     * Tests if any_function context have any exception stored
+     * @warning UB if any_function is empty
+     */
     bool has_exception() const noexcept
     {
         call_guard guard_{m_context, m_manager};
         return call_with(action_type::has_exception);
     }
+    /**
+     * Rethrows exception stored by any_function context
+     * @warning UB if no exception is stored
+     * @warning UB if any_function is empty
+     */
     void rethrow() const
     {
         auto& eptr_ = *reinterpret_cast<std::optional<std::exception_ptr>*>(
@@ -1305,45 +1481,75 @@ class any_function :
 
     /* Arguments */
 
+    /**
+     * Tests if any_function context have all arguments setup for call to be executed
+     * @warning UB if any_function is empty
+     */
     bool has_arguments() const noexcept
     {
         return call_with(action_type::has_all_arguments);
     }
+    /**
+     * Tests if any_function context have n'th argument setup
+     * @warning UB if any_function is empty
+     */
     bool has_argument(std::size_t n) const noexcept
     {
         return call_with(action_type::has_argument, null_id, &n);
     }
+    /**
+     * Returns the number of arguments stored callabe have
+     * @warning UB if any_function is empty
+     */
     std::size_t argument_count() const noexcept
     {
         std::size_t n_{0};
         call_with(action_type::get_argument_count, null_id, &n_);
         return n_;
     }
+    /**
+     * Tests if any_function context have n'th argument of specified type T
+     * @warning UB if any_function is empty
+     */
     template<class T>
     bool is_argument_of_type(std::size_t n) const noexcept
     {
-        return call_with(action_type::check_argument_type, type_id<T>(), &n);
+        return call_with(action_type::check_argument_type, type_id<function_argument<T>>(), &n);
     }
+    /**
+     * Casts n'th argument to specified type T
+     * @throw any_function::bad_type_cast If specified T is not a type of n'th argument
+     * @return reference to std::optional of some type, convertiable to T
+     * @warning UB if any_function is empty
+     */
     template<class T>
-    friend std::optional<T>& argument_cast(const any_function& af, std::size_t n)
+    friend std::optional<function_argument<T>>&
+        argument_cast(const any_function& af, std::size_t n)
     {
         if (!af.is_argument_of_type<T>(n))
         {
             throw bad_type_cast{};
         }
         call_guard guard_{af.m_context, af.m_manager};
-        return *reinterpret_cast<std::optional<T>*>(
+        return *reinterpret_cast<std::optional<function_argument<T>>*>(
             af.call_with(action_type::get_argument, null_id, &n));
     }
+    /**
+     * Casts n'th argument to specified type T
+     * @return nullptr if type cast failed, or
+     *      pointer to std::optional of some type, convertiable to T
+     * @warning UB if any_function is empty
+     */
     template<class T>
-    friend std::optional<T>* argument_cast(const any_function* af, std::size_t n) noexcept
+    friend std::optional<function_argument<T>>*
+        argument_cast(const any_function* af, std::size_t n) noexcept
     {
         if (!af->is_argument_of_type<T>(n))
         {
             return nullptr;
         }
         call_guard guard_{af->m_context, af->m_manager};
-        return reinterpret_cast<std::optional<T>*>(
+        return reinterpret_cast<std::optional<function_argument<T>>*>(
             af->call_with(action_type::get_argument, null_id, &n));
     }
 
@@ -1352,6 +1558,7 @@ class any_function :
     /**
      * Returns true if context can be called.
      * All arguments are ready and no result or exception is stored
+     * @warning UB if any_function is empty
      */
     bool is_prepared() const noexcept
     {
@@ -1361,6 +1568,7 @@ class any_function :
     }
     /**
      * Call with provided parameters
+     * @warning UB if any_function is empty
      */
     template<class ... Args>
     call_result operator()(Args&& ... args) const
@@ -1380,6 +1588,7 @@ class any_function :
     }
     /**
      * Call with stored parameters
+     * @warning UB if any_function is empty
      */
     call_result operator()() const noexcept
     {
@@ -1390,6 +1599,9 @@ class any_function :
 
     /* Validity and Equality */
 
+    /**
+     * Returns true if any_function is not empty.
+     */
     bool valid() const noexcept { return static_cast<bool>(*this); }
 
     explicit operator bool() const noexcept
@@ -1407,6 +1619,12 @@ class any_function :
 
 using any_function = detail::any_function::any_function;
 
+/**
+ * Helper that constructs any_function from function pointer.
+ * Rebinds provided allocator to handle type of the context.
+ * @tparam Tag Defines the context type
+ * @tparam Allocator Defines the type of allocator to be used
+ */
 template<class Tag, class Allocator, class R, class... Args>
 auto make_function(R(*f)(Args...), const Allocator& al = Allocator())
     -> std::pair<any_function, any_function::future<R>>
@@ -1415,6 +1633,16 @@ auto make_function(R(*f)(Args...), const Allocator& al = Allocator())
     return {af_, af_.get_future()};
 }
 
+/**
+ * Helper that constructs any_function from any callable and signature.
+ * Obtains callable operator() from provided signature.
+ * Rebinds provided allocator to handle type of the context.
+ * @warning Defined only if Callable has operator()
+ * @tparam Tag Defines the context type
+ * @tparam Signature The function signature of form R(Args...)
+ * @tparam Allocator Defines the type of allocator to be used
+ * @todo Add detection of that callable have operator() with provided signature
+ */
 template<class Tag, class Signature, class Allocator, class Callable,
     class sig_trait = detail::any_function::signature_trait<Signature>,
     class = typename std::enable_if<detail::any_function::is_callable<Callable>::value>::type

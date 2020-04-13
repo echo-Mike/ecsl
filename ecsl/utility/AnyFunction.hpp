@@ -1606,6 +1606,24 @@ auto make_signature() noexcept ->
     typename detail::any_function::signature_trait<Signature>::type { return {}; }
 
 /**
+ * Helper that constructs any_function and future from function pointer.
+ * Rebinds provided allocator to handle type of the context.
+ * @tparam Tag Defines the context type
+ * @tparam Allocator Defines the type of allocator to be used
+ */
+template<
+    class Tag,
+    class Allocator, /*may be deduced*/
+    /*deduced*/ class Result, class... Args
+>
+auto make_assignment(Result(*f)(Args...), const Allocator& al = Allocator())
+    -> std::pair<any_function, any_function::future<Result>>
+{
+    auto af_ = any_function(Tag{}, f, al);
+    return {af_, af_.get_future<Result>()};
+}
+
+/**
  * Helper that constructs any_function from function pointer.
  * Rebinds provided allocator to handle type of the context.
  * @tparam Tag Defines the context type
@@ -1616,16 +1634,43 @@ template<
     class Allocator, /*may be deduced*/
     /*deduced*/ class Result, class... Args
 >
-auto make_function(Result(*f)(Args...), const Allocator& al = Allocator())
-    -> std::pair<any_function, any_function::future<Result>>
+any_function make_function(Result(*f)(Args...), const Allocator& al = Allocator())
 {
-    auto af_ = any_function(Tag{}, f, al);
+    return {Tag{}, f, al};
+}
+
+/**
+ * Helper that constructs any_function and future from any callable and signature.
+ * Rebinds provided allocator to handle type of the context.
+ * @warning Defined only if Callable has operator()
+ * @tparam Tag Defines the context type
+ * @tparam Allocator Defines the type of allocator to be used
+ * @todo Add detection of that callable have operator() with provided signature
+ */
+template<
+    class Tag,
+    class Allocator, /*may be deduced*/
+    /*deduced*/ class Callable, class Result, class... Args
+>
+auto make_assignment(
+    Callable&& c,
+    detail::any_function::signature<Result, Args...> s,
+    const Allocator& al = Allocator()
+) ->
+    typename std::enable_if<
+        detail::any_function::is_callable<Callable>::value,
+        std::pair<
+            any_function,
+            any_function::future<typename decltype(s)::result_type>
+        >
+    >::type
+{
+    auto af_ = any_function(Tag{}, std::forward<Callable>(c), s, al);
     return {af_, af_.get_future<Result>()};
 }
 
 /**
  * Helper that constructs any_function from any callable and signature.
- * Obtains callable operator() from provided signature.
  * Rebinds provided allocator to handle type of the context.
  * @warning Defined only if Callable has operator()
  * @tparam Tag Defines the context type
@@ -1644,14 +1689,10 @@ auto make_function(
 ) ->
     typename std::enable_if<
         detail::any_function::is_callable<Callable>::value,
-        std::pair<
-            any_function,
-            any_function::future<typename decltype(s)::result_type>
-        >
+        any_function,
     >::type
 {
-    auto af_ = any_function(Tag{}, std::forward<Callable>(c), s, al);
-    return {af_, af_.get_future<Result>()};
+    return {Tag{}, std::forward<Callable>(c), s, al};
 }
 
 } // namespace ecsl

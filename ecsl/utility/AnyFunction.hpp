@@ -1304,9 +1304,9 @@ class any_function :
             Result,
             Args...
         >::type;
-        context_type* storage_ = alloc_context<context_type>(al);
-        storage_->m_callable = f;
-        m_context = storage_;
+        context_type* context_ = alloc_context<context_type>(al);
+        context_->m_callable = f;
+        m_context = context_;
         m_manager = &core_manager<
             context_type,
             decltype(f),
@@ -1329,9 +1329,15 @@ class any_function :
             Result,
             Args...
         >::type;
-        context_type* storage_ = alloc_context<context_type>(al);
-        storage_->m_callable = std::forward<Callable>(callable);
-        m_context = storage_;
+        context_type* context_ = alloc_context<context_type>(al);
+        try {
+            context_->m_callable = std::forward<Callable>(callable);
+        } catch(...)
+        {
+            context_->release();
+            throw;
+        }
+        m_context = context_;
         m_manager = &core_manager<
             context_type,
             typename std::remove_reference<Callable>::type,

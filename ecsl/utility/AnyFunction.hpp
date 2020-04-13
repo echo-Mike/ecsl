@@ -42,6 +42,8 @@ struct type_id_
     static void id_() {}
 };
 
+template<class... T> struct type_list{};
+
 template<class T, class U>
 constexpr typename std::enable_if<std::is_rvalue_reference<T>::value,
 std::optional<U>&&>::type optional_forward(std::optional<U>& opt) noexcept
@@ -59,7 +61,7 @@ template <class F, class Tuple, class... Args, std::size_t... I>
 constexpr decltype(auto) apply_impl(
     F& f,
     Tuple& t,
-    detail::type_list<Args...> a,
+    type_list<Args...>,
     std::index_sequence<I...>
 )
 {
@@ -79,8 +81,6 @@ constexpr bool has_values_impl(
     return result_;
 }
 
-template<class... T> struct type_list{};
-
 } // namespace detail
 
 /**
@@ -97,45 +97,23 @@ constexpr static type_id_t null_id = nullptr;
 template<class... T> type_id_t type_id() noexcept { return &detail::type_id_<T...>::id_; }
 
 /**
+ * Represents function signature
+ */
+template<class R, class... Args>
+struct signature
+{
+    using result_type = R;
+    using argument_list = detail::type_list<Args...>;
+};
+
+/**
  * Trait for signature breakdown
  */
-template<class T>
-struct signature_trait;
+template<class T> struct signature_trait;
 template<class R, class... Args>
 struct signature_trait<R(Args...)>
 {
-    using type = R(Args...);
-    using result_type = R;
-};
-template<class C, class R, class... Args>
-struct signature_trait<R(C::*)(Args...)>
-{
-    using type = R(C::*)(Args...);
-    using result_type = R;
-};
-/**
- * signature_trait helpers
- */
-template<class R, class... Args>
-auto get_signature(R(*)(Args...)) -> signature_trait<R(Args...)>;
-template<class C, class R, class... Args>
-auto get_signature_(R(C::*)(Args...)) -> signature_trait<R(C::*)(Args...)>;
-
-/**
- * Trait for signature translation from free-function
- * to member-function and vice-versa
- */
-template<class T, class C>
-struct translate_signature;
-template<class C, class R, class... Args>
-struct translate_signature<R(Args...), C>
-{
-    using type = signature_trait<R(C::*)(Args...)>;
-};
-template<class C, class R, class... Args>
-struct translate_signature<R(C::*)(Args...), C>
-{
-    using type = signature_trait<R(Args...)>;
+    using type = signature<R, Args...>;
 };
 
 /**
@@ -1315,15 +1293,15 @@ class any_function :
      * Constructs any_function from function pointer using specified
      * allocator template for the context allocator.
      */
-    template<class Tag, class T, template<class> class Allocator, class R, class... Args>
-    any_function(Tag, R(*f)(Args...), const Allocator<T>& al) : any_function{}
+    template<class Tag, class Result, class... Args, class T, template<class> class Allocator>
+    any_function(Tag, Result(*f)(Args...), const Allocator<T>& al) :
+        any_function{}
     {
-        using signature = decltype(get_signature(f));
         using context_type = typename context_trait<
             Tag,
             Allocator,
             decltype(f),
-            typename signature::result_type,
+            Result,
             Args...
         >::type;
         context_type* storage_ = alloc_context<context_type>(al);
@@ -1332,32 +1310,32 @@ class any_function :
         m_manager = &core_manager<
             context_type,
             decltype(f),
-            typename signature::result_type,
+            Result,
             Args...
         >;
     }
     /**
-     * Constructs any_function from any callable and member function pointer
+     * Constructs any_function from any callable and signature
      * using specified allocator template for the context allocator.
      */
-    template<class Tag, class C, class T, template<class> class Allocator, class R, class... Args>
-    any_function(Tag, C&& callable, R(C::*f)(Args...), const Allocator<T>& al) : any_function{}
+    template<class Tag, class Callable, class Result, class... Args, class T, template<class> class Allocator>
+    any_function(Tag, Callable&& callable, signature<Result, Args...>, const Allocator<T>& al) :
+        any_function{}
     {
-        using signature = decltype(get_signature(f));
         using context_type = typename context_trait<
             Tag,
             Allocator,
-            typename std::remove_reference<C>::type,
-            typename signature::result_type,
+            typename std::remove_reference<Callable>::type,
+            Result,
             Args...
         >::type;
         context_type* storage_ = alloc_context<context_type>(al);
-        storage_->m_callable = std::forward<C>(callable);
+        storage_->m_callable = std::forward<Callable>(callable);
         m_context = storage_;
         m_manager = &core_manager<
             context_type,
-            typename std::remove_reference<C>::type,
-            typename signature::result_type,
+            typename std::remove_reference<Callable>::type,
+            Result,
             Args...
         >;
     }
@@ -1620,17 +1598,29 @@ class any_function :
 using any_function = detail::any_function::any_function;
 
 /**
+ * Helper that constructs representation of function signature.
+ * @tparam Signature The function signature of form R(Args...)
+ */
+template<class Signature>
+auto make_signature() noexcept ->
+    typename detail::any_function::signature_trait<Signature>::type { return {}; }
+
+/**
  * Helper that constructs any_function from function pointer.
  * Rebinds provided allocator to handle type of the context.
  * @tparam Tag Defines the context type
  * @tparam Allocator Defines the type of allocator to be used
  */
-template<class Tag, class Allocator, class R, class... Args>
-auto make_function(R(*f)(Args...), const Allocator& al = Allocator())
-    -> std::pair<any_function, any_function::future<R>>
+template<
+    class Tag,
+    class Allocator, /*may be deduced*/
+    /*deduced*/ class Result, class... Args
+>
+auto make_function(Result(*f)(Args...), const Allocator& al = Allocator())
+    -> std::pair<any_function, any_function::future<Result>>
 {
     auto af_ = any_function(Tag{}, f, al);
-    return {af_, af_.get_future()};
+    return {af_, af_.get_future<Result>()};
 }
 
 /**
@@ -1639,25 +1629,29 @@ auto make_function(R(*f)(Args...), const Allocator& al = Allocator())
  * Rebinds provided allocator to handle type of the context.
  * @warning Defined only if Callable has operator()
  * @tparam Tag Defines the context type
- * @tparam Signature The function signature of form R(Args...)
  * @tparam Allocator Defines the type of allocator to be used
  * @todo Add detection of that callable have operator() with provided signature
  */
-template<class Tag, class Signature, class Allocator, class Callable,
-    class sig_trait = detail::any_function::signature_trait<Signature>,
-    class = typename std::enable_if<detail::any_function::is_callable<Callable>::value>::type
+template<
+    class Tag,
+    class Allocator, /*may be deduced*/
+    /*deduced*/ class Callable, class Result, class... Args
 >
-auto make_function(Callable&& c, const Allocator& al = Allocator()) ->
-    std::pair<
-        any_function,
-        any_function::future<typename sig_trait::resutl_type>
-    >
+auto make_function(
+    Callable&& c,
+    detail::any_function::signature<Result, Args...> s,
+    const Allocator& al = Allocator()
+) ->
+    typename std::enable_if<
+        detail::any_function::is_callable<Callable>::value,
+        std::pair<
+            any_function,
+            any_function::future<typename decltype(s)::result_type>
+        >
+    >::type
 {
-    using mem_sig_trait =
-        typename detail::any_function::translate_signature<typename sig_trait::type, Callable>::type;
-    typename mem_sig_trait::type f_ = &Callable::operator();
-    auto af_ = any_function(Tag{}, std::forward<Callable>(c), f_, al);
-    return {af_, af_.get_future()};
+    auto af_ = any_function(Tag{}, std::forward<Callable>(c), s, al);
+    return {af_, af_.get_future<Result>()};
 }
 
 } // namespace ecsl

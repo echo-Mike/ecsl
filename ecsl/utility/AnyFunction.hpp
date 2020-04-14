@@ -51,8 +51,24 @@ std::optional<U>&&>::type optional_forward(std::optional<U>& opt) noexcept
     return std::move(opt);
 }
 template<class T, class U>
-constexpr typename std::enable_if<!std::is_rvalue_reference<T>::value,
+constexpr typename std::enable_if<
+    !std::is_rvalue_reference<T>::value &&
+    (
+        std::is_copy_assignable<U>::value ||
+        std::is_copy_constructible<U>::value
+    ),
 std::optional<U>&>::type optional_forward(std::optional<U>& opt) noexcept
+{
+    return opt;
+}
+template<class T, class U>
+constexpr typename std::enable_if<
+    !std::is_rvalue_reference<T>::value &&
+    !(
+        std::is_copy_assignable<U>::value ||
+        std::is_copy_constructible<U>::value
+    ),
+std::optional<U>&&>::type optional_forward(std::optional<U>& opt) noexcept
 {
     return opt;
 }
@@ -75,7 +91,7 @@ constexpr bool has_values_impl(
 ) noexcept
 {
     bool result_ = true;
-    char _[sizeof...(Types)] =
+    int _[sizeof...(Types)] =
         {(result_ = result_ && static_cast<bool>(std::get<I>(t)), 0)...};
     static_cast<void>(_);
     return result_;
@@ -1139,13 +1155,13 @@ class any_function :
                 try {
                     if constexpr (std::is_void<Result>::value)
                     {
-                        apply(*context.m_callable, context.m_args, detail::type_list<Args...>{});
+                        apply(*context.m_callable, context.m_arguments, detail::type_list<Args...>{});
                         context.m_result = as_void{};
                     }
                     else
                     {
                         context.m_result =
-                            apply(*context.m_callable, context.m_args, detail::type_list<Args...>{});
+                            apply(*context.m_callable, context.m_arguments, detail::type_list<Args...>{});
                     }
                 }
                 catch (...)
@@ -1170,8 +1186,15 @@ class any_function :
             } break;
             case action_type::has_argument:
             {
-                std::size_t i_ = *reinterpret_cast<std::size_t*>(arg);
-                if (!ith_element::has_value(i_, context.m_arguments))
+                if constexpr (sizeof...(Args) != 0)
+                {
+                    std::size_t i_ = *reinterpret_cast<std::size_t*>(arg);
+                    if (!ith_element::has_value(i_, context.m_arguments))
+                    {
+                        return nullptr;
+                    }
+                }
+                else
                 {
                     return nullptr;
                 }
@@ -1185,8 +1208,15 @@ class any_function :
             } break;
             case action_type::check_argument_type:
             {
-                std::size_t i_ = *reinterpret_cast<std::size_t*>(arg);
-                if (!ith_element::is_same(i_, id, context.m_arguments))
+                if constexpr (sizeof...(Args) != 0)
+                {
+                    std::size_t i_ = *reinterpret_cast<std::size_t*>(arg);
+                    if (!ith_element::is_same(i_, id, context.m_arguments))
+                    {
+                        return nullptr;
+                    }
+                }
+                else
                 {
                     return nullptr;
                 }
@@ -1197,8 +1227,16 @@ class any_function :
             } break;
             case action_type::get_argument:
             {
-                std::size_t i_ = *reinterpret_cast<std::size_t*>(arg);
-                return ith_element::get(i_, context.m_arguments);
+                if constexpr (sizeof...(Args) != 0)
+                {
+                    std::size_t i_ = *reinterpret_cast<std::size_t*>(arg);
+                    return ith_element::get(i_, context.m_arguments);
+                }
+                else
+                {
+                    return nullptr;
+                }
+                
             } break;
             case action_type::get_exception:
             {
@@ -1257,18 +1295,24 @@ class any_function :
         return st_;
     }
 
-    template<template<class> class Allocator, class Callable, class R, class... Args>
-    static auto context_trait_impl(unsafe_tag) -> unsafe_ctx<Allocator, Callable, R, Args...>;
-    template<template<class> class Allocator, class Callable, class R, class... Args>
-    static auto context_trait_impl(shared_tag) -> shared_ctx<Allocator, Callable, R, Args...>;
-    template<template<class> class Allocator, class Callable, class R, class... Args>
-    static auto context_trait_impl(spinlock_tag) -> spinlock_ctx<Allocator, Callable, R, Args...>;
-    template<template<class> class Allocator, class Callable, class R, class... Args>
-    static auto context_trait_impl(waitable_tag) -> waitable_ctx<Allocator, Callable, R, Args...>;
-    template<class Tag, template<class> class Allocator, class Callable, class R, class... Args>
+    template<template<class> class Allocator, class Callable, class Result, class... Args>
+    static auto context_trait_impl(unsafe_tag) -> unsafe_ctx<Allocator, Callable, Result, Args...>;
+    template<template<class> class Allocator, class Callable, class Result, class... Args>
+    static auto context_trait_impl(shared_tag) -> shared_ctx<Allocator, Callable, Result, Args...>;
+    template<template<class> class Allocator, class Callable, class Result, class... Args>
+    static auto context_trait_impl(spinlock_tag) -> spinlock_ctx<Allocator, Callable, Result, Args...>;
+    template<template<class> class Allocator, class Callable, class Result, class... Args>
+    static auto context_trait_impl(waitable_tag) -> waitable_ctx<Allocator, Callable, Result, Args...>;
+    template<class Tag, template<class> class Allocator, class Callable, class Result, class... Args>
     struct context_trait
     {
-        using type = decltype(context_trait_impl<Allocator, Callable, R, function_argument<Args>...>(Tag{}));
+        using type = decltype(context_trait_impl<
+            Allocator,
+            Callable,
+            function_result<Result>,
+            function_argument<Args>...
+            >(Tag{})
+        );
     };
 
   protected:
@@ -1688,15 +1732,12 @@ template<
     class Allocator, /*may be deduced*/
     /*deduced*/ class Callable, class Result, class... Args
 >
-auto make_function(
+typename std::enable_if<detail::any_function::is_callable<Callable>::value,
+any_function>::type make_function(
     Callable&& c,
     detail::any_function::signature<Result, Args...> s,
     const Allocator& al = Allocator()
-) ->
-    typename std::enable_if<
-        detail::any_function::is_callable<Callable>::value,
-        any_function,
-    >::type
+)
 {
     return {Tag{}, std::forward<Callable>(c), s, al};
 }

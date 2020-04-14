@@ -70,7 +70,7 @@ constexpr typename std::enable_if<
     ),
 std::optional<U>&&>::type optional_forward(std::optional<U>& opt) noexcept
 {
-    return opt;
+    return std::move(opt);
 }
 
 template <class F, class Tuple, class... Args, std::size_t... I>

@@ -1130,10 +1130,13 @@ class any_function :
             } break;
             case action_type::call:
             {
-                if (!has_values(context.m_arguments))
+                if constexpr (sizeof...(Args) != 0)
                 {
-                    context.template store_exception<missing_argument>();
-                    return nullptr;
+                    if (!has_values(context.m_arguments))
+                    {
+                        context.template store_exception<missing_argument>();
+                        return nullptr;
+                    }
                 }
                 struct notifier
                 {
@@ -1236,7 +1239,6 @@ class any_function :
                 {
                     return nullptr;
                 }
-                
             } break;
             case action_type::get_exception:
             {
@@ -1252,9 +1254,12 @@ class any_function :
             } break;
             case action_type::has_all_arguments:
             {
-                if (!has_values(context.m_arguments))
+                if constexpr (sizeof...(Args) != 0)
                 {
-                    return nullptr;
+                    if (!has_values(context.m_arguments))
+                    {
+                        return nullptr;
+                    }
                 }
             } break;
         }

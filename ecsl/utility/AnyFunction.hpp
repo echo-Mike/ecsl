@@ -1373,7 +1373,7 @@ class any_function :
         >::type;
         context_type* context_ = alloc_context<context_type>(al);
         try {
-            context_->m_callable = std::forward<Callable>(callable);
+            context_->m_callable.emplace(std::forward<Callable>(callable));
         } catch(...)
         {
             context_->release();

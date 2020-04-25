@@ -808,14 +808,7 @@ class any_function :
         void store_exception() noexcept
         {
             try { throw Exception{}; }
-            catch (...)
-            {
-                if (m_exception.has_value())
-                {   //? Here is the second uncought exception -> call terminate
-                    throw;
-                }
-                m_exception = std::current_exception();
-            }
+            catch (...) { store_exception(); }
         }
 
         void store_exception() noexcept

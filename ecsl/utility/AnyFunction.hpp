@@ -429,24 +429,18 @@ class af_ctx_manager
 
     af_ctx_manager& operator=(const af_ctx_manager& other)
     {
-        if (this == &other)
+        if (this != &other)
         {
-            return *this;
+            *this = af_ctx_manager(other);
         }
-        if (static_cast<bool>(*this))
-        {
-            call_with(action_type::down_ref_counter);
-        }
-        *this = af_ctx_manager(other);
         return *this;
     }
     af_ctx_manager& operator=(af_ctx_manager&& other) noexcept
     {
-        if (this == &other)
+        if (this != &other)
         {
-            return *this;
+            swap(other);
         }
-        swap(other);
         return *this;
     }
 
